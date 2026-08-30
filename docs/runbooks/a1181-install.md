@@ -5,10 +5,16 @@ run on the real machine. See `docs/a1181-gap-analysis.md` for the why.
 
 ## Scope
 
-- Supported: MacBook2,1 (late 2006 Core 2 Duo A1181) and later Core 2 Duo
-  A1181s. Max the RAM first (2x2 GB gives ~3 GB usable).
-- Not supported: MacBook1,1 (early 2006 Core Duo). It is 32-bit only and
-  cannot run Arch x86_64.
+The fork ships as Omarchy Lite: no preinstalled applications. Two tracks
+(see docs/a1181-gap-analysis.md, "Scope decision"):
+
+- Track A, branch `a1181-compat`: MacBook2,1 (late 2006 Core 2 Duo) and
+  later Core 2 Duo A1181s, on official Arch x86_64. Max the RAM first
+  (2x2 GB gives ~3 GB usable). This runbook describes Track A.
+- Track B, branch `a1181-32` (planned): MacBook1,1 (early 2006 Core Duo,
+  EMC 2092), on archlinux32 i686. Same steps apply with three changes:
+  use the archlinux32 ISO and mirrors, skip the mixed-mode note (a 32-bit
+  kernel boots natively on the 32-bit EFI), and expect the 2 GB RAM cap.
 
 ## Prepare install media
 

@@ -40,6 +40,41 @@ theming, keybindings and CLI tooling on sway with pure-CPU compositing:
 no animations, no blur, no screen sharing. The silicon could never draw
 those anyway.
 
+## Scope decision: Omarchy Lite (2026-08-30)
+
+The fork ships as "Omarchy Lite": the core experience with no preinstalled
+applications. No browser, no Docker, no media or office apps. The user
+installs what they want. This deletes gaps 7, 10, 17 and 18 below and
+shrinks 9, 12 and 16. The Lite core is about 45 packages:
+
+- System: base, linux, linux-firmware, grub, efibootmgr, networkmanager,
+  pipewire, wireplumber, pipewire-pulse, polkit, brightnessctl,
+  zram-generator, greetd-tuigreet, seatd
+- Desktop: sway, swaybg, swaylock, swayidle, waybar, fuzzel, mako,
+  wlsunset, grim, slurp, wl-clipboard, xdg-desktop-portal-wlr, foot
+- CLI: git, starship, tmux, neovim, fzf, ripgrep, fd, bat, btop, fastfetch
+- Mac: mbpfan; isight-firmware-tools optional
+
+With Lite scoping there are two tracks, sharing all compositor, shim,
+theme, login and boot work:
+
+- **Track A (`a1181-compat`): MacBook2,1+, official Arch x86_64.**
+  As analyzed below.
+- **Track B (`a1181-32`, planned): MacBook1,1, archlinux32 i686.**
+  Verified on the mirrors 2026-08-30: sway 1:1.8 (wlroots 0.16, pixman
+  renderer supported), swaylock 1.8.5, swayidle 1.9, waybar 0.9.15, foot,
+  fuzzel, mako, greetd-tuigreet, mesa 1:24.0.4 plus mesa-amber 21.3.9,
+  kernel 6.19, networkmanager 1.56, pipewire 1:0.3.65. The whole Lite core
+  is available. Delta from Track A: point default/pacman configs and
+  mirrorlists at archlinux32, rebuild the omarchy-own packages for i686
+  from omarchy-pkgs, pin to the versions above. Boot is simpler: a 32-bit
+  kernel on the 32-bit Apple EFI boots via plain GRUB i386-efi, no mixed
+  mode. Cap: 2 GB RAM; a sway/pixman + foot session idles around 350-400
+  MB, which fits. Caveats: repo browsers are ancient (chromium 90, firefox
+  114); if a browser is wanted, use Mozilla's official i686 Firefox
+  tarball (verify glibc compatibility first). archlinux32 is a small
+  volunteer project; expect to rebuild an occasional package.
+
 ## Gap matrix
 
 Severity: **blocker** = stock Omarchy does not start. **major** = works but
