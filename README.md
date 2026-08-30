@@ -1,16 +1,63 @@
-# Omarchy CPU
+# omarchy32cpu
 
-This fork is **Omarchy CPU**: pure CPU-bound Omarchy. The full Omarchy
-workflow - tiling, workspaces, keybindings, the 24-color theme engine,
-the menu system and CLI tooling - with no GPU dependence at all and no
-preinstalled applications. sway with the wlroots pixman renderer
-replaces Hyprland; waybar, fuzzel, mako and swaylock replace
-Quickshell; greetd replaces SDDM. It runs where stock Omarchy cannot:
-VMs without GPU passthrough, cloud desktops, thin clients, and old
-hardware. First target: archlinux32 i686 on the 2006 MacBook A1181
-(32-bit Core Duo, GMA 950, 32-bit Apple EFI).
+**Pure CPU-bound Omarchy.** The full Omarchy workflow - tiling,
+workspaces, keybindings, the 24-color theme engine, the menu system
+and the CLI tooling - with no GPU dependence at all and no
+preinstalled applications. Every pixel is drawn by the CPU.
 
-Start at docs/a1181-gap-analysis.md and docs/runbooks/.
+It runs where stock Omarchy cannot: VMs without GPU passthrough,
+cloud desktops, thin clients, and old hardware. The first and most
+hostile target: **archlinux32 i686 on the 2006 Apple MacBook A1181**
+(32-bit Core Duo, GMA 950, 32-bit Apple EFI). This branch is based on
+upstream Omarchy v4.0.1 "Quattro".
+
+## What changed
+
+| Upstream | This fork | Why |
+|---|---|---|
+| Hyprland (GLES 3.0+) | sway 1.8, pixman renderer | zero-GPU compositing |
+| Quickshell desktop | waybar, fuzzel, mako, swaylock behind shims | no Qt GL |
+| SDDM greeter | greetd + tuigreet, autologin session | no GL at login |
+| limine + 64-bit UKI | GRUB i386-efi as BOOTIA32.EFI | 32-bit Apple EFI |
+| Arch x86_64 + pkgs.omarchy.org | archlinux32 i686 + fork overrides | 32-bit CPU |
+| 147-package app fleet | 55-package core, bring your own apps | 2 GB RAM |
+
+Kept unchanged: the theme engine (all 22 themes render sway, waybar,
+mako and swaylock), the bash environment, the omarchy CLI router,
+keybinding philosophy, zram/oomd memory tuning. New: `omarchy-remote-view`
+serves the live session over VNC (wayvnc, CPU-side screencopy) for
+cloud and headless use.
+
+## Status
+
+Pre-release, software-validated end to end on a QEMU bench that
+mimics the MacBook1,1 (32-bit CPU model, 2 GB RAM, IA32 UEFI
+firmware): the fork's own installer builds a system that boots to the
+themed sway desktop with zero failed units. `test/cli` 116/116,
+`test/shell` 155/155. Not yet run on the physical MacBook (the GMA
+950 render floor is the open hardware question).
+
+## Documentation
+
+- [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md) - the honest
+  contract: what is validated, every bug found and fixed during
+  validation, what is missing, and what this stack can never do
+  (screen sharing, animations, the upstream plugin system)
+- [`docs/a1181-gap-analysis.md`](docs/a1181-gap-analysis.md) - the
+  verified gap matrix and the worklist that drove the port
+- [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md) -
+  the install procedure, including the manual ISO-layer duties
+- [`docs/runbooks/testbench.md`](docs/runbooks/testbench.md) - the
+  cloud test bench (i686 chroot, IA32-UEFI QEMU VM, browser view)
+
+## Caveats, honestly
+
+No screen sharing ever (pixman has no screencast path). No hardware
+video decode, no Vulkan, no animations or blur. The upstream plugin
+system (Quickshell QML) is incompatible. Updates do not track
+upstream; the fork carries its own package overrides (fontconfig,
+neatvnc) because archlinux32 has real dependency drift. See the
+release notes for the full list.
 
 ---
 
