@@ -96,7 +96,7 @@ start_webcam_overlay() {
   # second was partly guessing at, so the remainder is trimmed to hold the
   # pre-capture delay where it was: starting later costs the first words spoken.
   local waited=0
-  while ((waited < 40)) && ! hyprctl clients -j | jq -e 'any(.[]; .title == "WebcamOverlay")' >/dev/null 2>&1; do
+  while ((waited < 40)) && ! swaymsg -t get_tree | jq -e '[.. | objects | select(.name? == "WebcamOverlay")] | length > 0' >/dev/null 2>&1; do
     sleep 0.05
     ((waited++))
   done
@@ -114,7 +114,7 @@ cleanup_webcam() {
 
 default_resolution() {
   local width height
-  read -r width height < <(hyprctl monitors -j | jq -r '.[] | select(.focused == true) | "\(.width) \(.height)"')
+  read -r width height < <(swaymsg -t get_outputs | jq -r '.[] | select(.focused == true) | "\(.current_mode.width // 0) \(.current_mode.height // 0)"')
   if ((width > 3840 || height > 2160)); then
     echo "3840x2160"
   else

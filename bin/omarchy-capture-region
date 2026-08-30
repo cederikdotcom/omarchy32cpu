@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# omarchy:summary=Pick a screen region over frozen screen content
+# omarchy:summary=Pick a screen region
 # omarchy:args=[region|windows|smart|fullscreen] [--keep-freeze] [--match-monitor] | --take-fullscreen | --take-window | --select-window <next|prev|left|right|up|down>
 # omarchy:hidden=true
 
@@ -14,43 +14,34 @@
 #                   (area < 20px^2) snaps to the rectangle it landed in
 #   fullscreen      the focused monitor, no interaction
 #
-#   --keep-freeze   leave the hyprpicker screen freeze running and print its
-#                   PID as the first output line (empty when no freeze was
-#                   started); the caller owns killing it
+#   --keep-freeze   kept for callers: Omarchy CPU has no screen-freeze helper,
+#                   so the first output line (the freeze PID) is always empty
 #   --match-monitor print "monitor:NAME" instead when the picked geometry
 #                   exactly matches a monitor
 
 FULLSCREEN_MARKER="${XDG_RUNTIME_DIR:-/tmp}/omarchy-capture-region-fullscreen"
 WINDOW_MARKER="${XDG_RUNTIME_DIR:-/tmp}/omarchy-capture-region-window"
 
-# accounting for portrait/transformed displays
-JQ_MONITOR_GEO='
-  def format_geo:
-    .x as $x | .y as $y |
-    (.width / .scale | floor) as $w |
-    (.height / .scale | floor) as $h |
-    .transform as $t |
-    if $t == 1 or $t == 3 then
-      "\($x),\($y) \($h)x\($w)"
-    else
-      "\($x),\($y) \($w)x\($h)"
-    end;
-'
-
 active_workspace() {
-  hyprctl monitors -j | jq -r '.[] | select(.focused == true) | .activeWorkspace.id'
+  swaymsg -t get_workspaces | jq -r '.[] | select(.focused == true) | .name'
 }
 
-# Hidden group members and windows stacked at identical geometry collapse to
-# one rectangle: slurp cannot tell them apart, and duplicates would stall the
-# Tab cycle on the first copy.
+# Background tabs of tabbed/stacked containers are invisible and windows
+# stacked at identical geometry collapse to one rectangle: slurp cannot tell
+# them apart, and duplicates would stall the Tab cycle on the first copy.
 window_rects() {
-  hyprctl clients -j | jq -r --arg ws "$(active_workspace)" \
-    '[.[] | select(.workspace.id == ($ws | tonumber) and .hidden != true) | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"] | unique[]'
+  swaymsg -t get_tree | jq -r --arg ws "$(active_workspace)" \
+    '[.. | objects | select(.type? == "workspace" and .name == $ws)
+      | .. | objects | select(.type? == "con" or .type? == "floating_con")
+      | select(.pid != null and .visible == true)
+      | "\(.rect.x),\(.rect.y) \(.rect.width)x\(.rect.height)"] | unique[]'
 }
 
+# sway output rects are already in logical coordinates with the transform
+# applied, so no scale or rotation math is needed.
 monitor_rects() {
-  hyprctl monitors -j | jq -r --arg ws "$(active_workspace)" "${JQ_MONITOR_GEO} .[] | select(.activeWorkspace.id == (\$ws | tonumber)) | format_geo"
+  swaymsg -t get_outputs | jq -r --arg ws "$(active_workspace)" \
+    '.[] | select(.active == true and .current_workspace == $ws) | "\(.rect.x),\(.rect.y) \(.rect.width)x\(.rect.height)"'
 }
 
 get_rectangles() {
@@ -59,7 +50,13 @@ get_rectangles() {
 }
 
 focused_monitor_geo() {
-  hyprctl monitors -j | jq -r "${JQ_MONITOR_GEO} .[] | select(.focused == true) | format_geo"
+  swaymsg -t get_outputs | jq -r '.[] | select(.focused == true) | "\(.rect.x),\(.rect.y) \(.rect.width)x\(.rect.height)"'
+}
+
+focused_window_geo() {
+  swaymsg -t get_tree | jq -r \
+    '[.. | objects | select(.type? == "con" or .type? == "floating_con") | select(.focused == true)]
+     | first | if . == null then empty else "\(.rect.x),\(.rect.y) \(.rect.width)x\(.rect.height)" end'
 }
 
 # slurp highlights the smallest box containing the point and keeps the first
@@ -116,24 +113,23 @@ warp_point_in() {
   return 1
 }
 
-# Whatever slurp is highlighting under the cursor. It is fed monitor rects as
-# well as window rects, so a cursor in a gap or over the bar highlights the
-# monitor rather than any window.
+# sway has no cursor position query, so the focused window stands in for
+# whatever slurp is highlighting; a focus in a gap or on an empty workspace
+# falls back to the focused monitor.
 geo_at_cursor() {
-  local pos=$(hyprctl cursorpos)
-  local x=${pos%,*}
-  local y=${pos#*, }
+  local geo
+  geo=$(focused_window_geo)
 
-  if resolve_rect_at "$x" "$y" < <(window_rects) || resolve_rect_at "$x" "$y" < <(monitor_rects); then
-    echo "$RESOLVED_RECT"
+  if [[ -n $geo ]]; then
+    echo "$geo"
   else
     focused_monitor_geo
   fi
 }
 
-# Keyboard control while slurp is open: binds scoped to slurp's layer
-# surface (default/hypr/bindings/utilities.lua) invoke these modes. The
-# --take-* modes flag the intent with a marker file and dismiss slurp.
+# Keyboard control while slurp is open: binds scoped to slurp's layer surface
+# invoke these modes. The --take-* modes flag the intent with a marker file
+# and dismiss slurp.
 if [[ ${1:-} == "--take-fullscreen" ]]; then
   pgrep -x slurp >/dev/null || exit 0
   touch "$FULLSCREEN_MARKER"
@@ -154,9 +150,6 @@ if [[ ${1:-} == "--select-window" ]]; then
   pgrep -x slurp >/dev/null || exit 0
 
   direction=${2:-}
-  pos=$(hyprctl cursorpos)
-  origin_x=${pos%,*}
-  origin_y=${pos#*, }
 
   candidates=$(window_rects)
 
@@ -187,11 +180,21 @@ if [[ ${1:-} == "--select-window" ]]; then
     printf '%d\t%d\t%s\n' "${BASH_REMATCH[2]}" "${BASH_REMATCH[1]}" "$rect"
   done <<<"$reachable" | sort -n -k1,1 -k2,2 | cut -f3-)
 
-  # The selection to move from is the one slurp highlights, resolved from the
-  # same list in the same order as --take-window so navigation and capture
-  # never disagree. Measure from its center.
+  # The selection to move from is the focused window (sway cannot report the
+  # cursor position), resolved from the same list --take-window uses so
+  # navigation and capture never disagree. Measure from its center.
   current=""
-  resolve_rect_at "$origin_x" "$origin_y" <<<"$candidates" && current=$RESOLVED_RECT
+  origin_x=0
+  origin_y=0
+  focused=$(focused_window_geo)
+  if [[ $focused =~ ^(-?[0-9]+),(-?[0-9]+)[[:space:]]([0-9]+)x([0-9]+)$ ]]; then
+    origin_x=$((BASH_REMATCH[1] + BASH_REMATCH[3] / 2))
+    origin_y=$((BASH_REMATCH[2] + BASH_REMATCH[4] / 2))
+    resolve_rect_at "$origin_x" "$origin_y" <<<"$candidates" && current=$RESOLVED_RECT
+  elif [[ $(focused_monitor_geo) =~ ^(-?[0-9]+),(-?[0-9]+)[[:space:]]([0-9]+)x([0-9]+)$ ]]; then
+    origin_x=$((BASH_REMATCH[1] + BASH_REMATCH[3] / 2))
+    origin_y=$((BASH_REMATCH[2] + BASH_REMATCH[4] / 2))
+  fi
 
   if [[ $current =~ ^(-?[0-9]+),(-?[0-9]+)[[:space:]]([0-9]+)x([0-9]+)$ ]]; then
     origin_x=$((BASH_REMATCH[1] + BASH_REMATCH[3] / 2))
@@ -266,7 +269,7 @@ if [[ ${1:-} == "--select-window" ]]; then
 
   if [[ -n $target && -n ${warp_points[$target]} ]]; then
     read -r target_x target_y <<<"${warp_points[$target]}"
-    hyprctl eval "hl.dispatch(hl.dsp.cursor.move({ x = $target_x, y = $target_y }))" >/dev/null
+    swaymsg "seat - cursor set $target_x $target_y" >/dev/null
   fi
   exit 0
 fi
@@ -302,26 +305,16 @@ pick() {
   printf '%s' "$selection"
 }
 
+# No screen-freeze helper in Omarchy CPU (hyprpicker is Hyprland-only), so
+# slurp selects over live content. FREEZE_PID stays empty for --keep-freeze
+# callers, which already treat that as "no freeze was started".
 FREEZE_PID=""
-freeze_screen() {
-  hyprpicker -r -z >/dev/null 2>&1 &
-  FREEZE_PID=$!
-  sleep .1
-}
-
-cleanup_freeze() {
-  [[ $KEEP_FREEZE == true ]] && return
-  [[ -n $FREEZE_PID ]] && kill $FREEZE_PID 2>/dev/null
-}
-trap cleanup_freeze EXIT
 
 case "$MODE" in
 region)
-  freeze_screen
   SELECTION=$(pick)
   ;;
 windows)
-  freeze_screen
   SELECTION=$(get_rectangles | pick -r)
   ;;
 fullscreen)
@@ -329,12 +322,11 @@ fullscreen)
   ;;
 smart | *)
   RECTS=$(get_rectangles)
-  freeze_screen
   SELECTION=$(echo "$RECTS" | pick)
 
   # A bare click (area < 20px^2) snaps to whichever rectangle it landed in,
   # so users don't end up with accidental 2px captures. X and Y can be
-  # negative (Hyprland monitor positions in multi-display layouts).
+  # negative (monitor positions in multi-display layouts).
   if [[ $SELECTION =~ ^(-?[0-9]+),(-?[0-9]+)[[:space:]]([0-9]+)x([0-9]+)$ ]] && ((BASH_REMATCH[3] * BASH_REMATCH[4] < 20)); then
     click_x=${BASH_REMATCH[1]}
     click_y=${BASH_REMATCH[2]}
@@ -360,7 +352,8 @@ esac
 [[ -n $SELECTION ]] || exit 1
 
 if [[ $MATCH_MONITOR == true ]]; then
-  monitor=$(hyprctl monitors -j | jq -r --arg geo "$SELECTION" "${JQ_MONITOR_GEO} .[] | select(format_geo == \$geo) | .name" | head -1)
+  monitor=$(swaymsg -t get_outputs | jq -r --arg geo "$SELECTION" \
+    '.[] | select("\(.rect.x),\(.rect.y) \(.rect.width)x\(.rect.height)" == $geo) | .name' | head -1)
   if [[ -n $monitor ]]; then
     echo "monitor:$monitor"
     exit 0

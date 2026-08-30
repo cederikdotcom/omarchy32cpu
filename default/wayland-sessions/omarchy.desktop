@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=Omarchy (Hyprland uwsm)
-Comment=Omarchy Hyprland session managed by uwsm
-Exec=uwsm start -g -1 -e -D Hyprland hyprland.desktop
-TryExec=uwsm
+Name=Omarchy (sway)
+Comment=Omarchy 32-bit Lite sway session (pixman renderer)
+Exec=omarchy-sway-launch
+TryExec=sway
 Type=Application

@@ -1,13 +1,29 @@
-# Omarchy 32-bit Lite: gap analysis
+# Omarchy CPU: pure CPU-bound Omarchy, 32-bit first
 
-Target: an Omarchy Lite rendition for the 2006 MacBook1,1 (A1181, EMC
-2092), built on archlinux32 i686. This branch is based on the upstream
-v4.0.1 "Quattro" tag. Analysis date: 2026-08-30, updated the same day
-after chroot validation on the cloud test bench.
+Identity: this fork is **Omarchy CPU** - the Omarchy experience with no
+GPU dependence at all, and no preinstalled applications. Every pixel is
+drawn by the CPU: sway compositing via the wlroots pixman renderer,
+foot (CPU-rasterized terminal), waybar/fuzzel/mako/swaylock (cairo),
+tuigreet (TTY). Mesa ships only so GL apps the user installs can fall
+back to llvmpipe.
 
-Scope: Omarchy Lite means the core experience with no preinstalled
-applications. No browser, no Docker, no media or office apps. The user
-installs what they want. The Lite core is about 45 packages.
+The fork has two layers:
+
+1. **The CPU core** (architecture-independent): the compositor swap
+   (Hyprland -> sway/pixman), the shell swap (Quickshell -> waybar/
+   fuzzel/mako/swaylock shims), the swaymsg IPC port, the theme
+   templates, the Lite package set. This layer also serves x86_64
+   machines stock Omarchy cannot: VMs without GPU passthrough, cloud
+   desktops, thin clients, old or broken graphics.
+2. **The 32-bit target layer**: archlinux32 i686 pacman configs, GRUB
+   i386-efi boot (BOOTIA32.EFI), and the A1181 hardware fixes, for the
+   first and most hostile target: the 2006 MacBook1,1 (EMC 2092,
+   32-bit Core Duo, 2 GB RAM, GMA 950, 32-bit Apple EFI).
+
+This branch is based on the upstream v4.0.1 "Quattro" tag. Analysis
+date: 2026-08-30, updated the same day after chroot and VM validation
+on the cloud test bench. The Lite core is about 45 packages; the user
+installs their own applications.
 
 ## Verdict
 

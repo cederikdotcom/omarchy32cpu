@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# omarchy:summary=Toggle permanent Hyprland flags by copying them into a directory that's sourced entirely.
+# omarchy:summary=Toggle permanent sway config flags by copying them into a directory that's included entirely.
 # omarchy:args=<flag-name> [on|off|toggle]
 
 usage() {
@@ -14,16 +14,18 @@ fi
 
 FLAG_NAME="$1"
 ACTION="${2:-toggle}"
-FLAG_FILE="$HOME/.local/state/omarchy/toggles/hypr/$FLAG_NAME.lua"
-FLAG_SOURCE="$OMARCHY_PATH/default/hypr/toggles/$FLAG_NAME.lua"
+FLAG_FILE="$HOME/.local/state/omarchy/toggles/sway/$FLAG_NAME.conf"
+FLAG_SOURCE="$OMARCHY_PATH/default/sway/toggles/$FLAG_NAME.conf"
 
 on() {
+  mkdir -p "$(dirname "$FLAG_FILE")"
+
+  # A flag with no shipped config snippet is still tracked as a marker file,
+  # so state checks and callers that apply the effect live keep working.
   if [[ -f $FLAG_SOURCE ]]; then
-    mkdir -p "$(dirname "$FLAG_FILE")"
     cp "$FLAG_SOURCE" "$FLAG_FILE"
   else
-    echo "Flag not found: $FLAG_NAME" >&2
-    exit 1
+    : >"$FLAG_FILE"
   fi
 }
 
@@ -51,4 +53,4 @@ case $ACTION in
     ;;
 esac
 
-hyprctl reload >/dev/null
+swaymsg reload >/dev/null

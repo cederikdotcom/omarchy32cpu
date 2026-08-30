@@ -6,27 +6,20 @@
 
 ON_TEMP=4000
 OFF_TEMP=6500
-IDENTITY_TEMP=6000
+STATE_FILE="$HOME/.local/state/omarchy/toggles/nightlight"
 
-current_temp() {
-  local output
-
-  output=$(hyprctl hyprsunset temperature 2>/dev/null) || return
-  grep -oE '[0-9]+' <<<"$output" | head -n1
+# wlsunset has no IPC to query, so the state file plus a live process is the
+# nightlight state.
+nightlight_on() {
+  [[ -f $STATE_FILE ]] && pgrep -x wlsunset >/dev/null
 }
 
 status_json() {
-  local temp enabled
-
-  temp=$(current_temp)
-  if [[ -n $temp ]] && (( temp < IDENTITY_TEMP )); then
-    enabled=true
+  if nightlight_on; then
+    jq -cn --argjson temp "$ON_TEMP" '{enabled:true, temperature:$temp}'
   else
-    enabled=false
+    jq -cn --argjson temp "$OFF_TEMP" '{enabled:false, temperature:$temp}'
   fi
-
-  jq -cn --argjson enabled "$enabled" --arg temp "$temp" \
-    '{enabled:$enabled, temperature:(($temp | tonumber?) // null)}'
 }
 
 if [[ ${1:-} == "--status" ]]; then
@@ -34,26 +27,16 @@ if [[ ${1:-} == "--status" ]]; then
   exit 0
 fi
 
-# Ensure hyprsunset is running
-if ! pgrep -x hyprsunset >/dev/null; then
-  setsid uwsm-app -- hyprsunset &
-fi
-
-# Query the current temperature
-CURRENT_TEMP=$(current_temp)
-
-if [[ -z $CURRENT_TEMP || $CURRENT_TEMP == $OFF_TEMP ]]; then
-  TARGET_TEMP=$ON_TEMP
+if nightlight_on; then
+  pkill -x wlsunset 2>/dev/null
+  rm -f "$STATE_FILE"
 else
-  TARGET_TEMP=$OFF_TEMP
+  pkill -x wlsunset 2>/dev/null
+  # Pinning the high temperature one Kelvin above the low holds the night
+  # temperature around the clock; toggling off kills the process instead.
+  setsid uwsm-app -- wlsunset -t $ON_TEMP -T $((ON_TEMP + 1)) >/dev/null 2>&1 &
+  mkdir -p "$(dirname "$STATE_FILE")"
+  touch "$STATE_FILE"
 fi
-
-# A freshly-started hyprsunset applies its default temperature at the end of
-# its boot, overriding anything set before then — so resend until it sticks
-for _ in {1..10}; do
-  hyprctl hyprsunset temperature $TARGET_TEMP >/dev/null 2>&1
-  sleep 0.2
-  [[ $(current_temp) == "$TARGET_TEMP" ]] && break
-done
 
 omarchy-shell -q nightlight refresh

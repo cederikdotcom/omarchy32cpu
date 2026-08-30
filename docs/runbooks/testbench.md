@@ -48,7 +48,7 @@ development. Created 2026-08-30. Delete it when the port ships.
   directory (pacstrap Lite core, greetd initial_session into
   sway/pixman, GRUB removable install; grub-install must run via
   arch-chroot, not nspawn, so it can see the loop device). Login
-  ceder/omarchy or root/omarchy, serial console on ttyS0.
+  cederik/omarchy or root/omarchy, serial console on ttyS0.
 - Boot it: the detached qemu-system-i386 command in the shell history
   of this repo's rehearsal, or adapt launch-uefi32.sh to
   `-drive ...file=disk.img,format=raw`. Screenshot: `echo screendump

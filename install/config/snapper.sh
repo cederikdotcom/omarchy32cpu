@@ -1,3 +1,10 @@
+# Snapshots need a btrfs root and snapper; Omarchy CPU defaults to ext4,
+# so this is opt-in for users who chose btrfs themselves.
+if [[ ${OMARCHY_SNAPPER_CONFIGURE_TEST:-0} != "1" ]]; then
+  [[ $(findmnt -no FSTYPE / 2>/dev/null) == btrfs ]] || exit 0
+  command -v snapper >/dev/null || exit 0
+fi
+
 SNAPPER_CONFIG_PATH="${OMARCHY_SNAPPER_CONFIG_PATH:-/etc/snapper/configs/root}"
 SNAPPER_CONF_PATH="${OMARCHY_SNAPPER_CONF_PATH:-/etc/conf.d/snapper}"
 template="${OMARCHY_SNAPPER_TEMPLATE:-${OMARCHY_PATH:-/usr/share/omarchy}/default/snapper/root}"
@@ -21,4 +28,4 @@ printf '%s\n' 'SNAPPER_CONFIGS="root"' >"$SNAPPER_CONF_PATH"
 chmod 0644 "$SNAPPER_CONF_PATH"
 
 systemctl disable --now snapper-timeline.timer >/dev/null 2>&1 || true
-systemctl enable --now snapper-cleanup.timer limine-snapper-sync.service >/dev/null 2>&1 || true
+systemctl enable --now snapper-cleanup.timer >/dev/null 2>&1 || true

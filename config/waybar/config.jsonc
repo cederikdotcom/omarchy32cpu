@@ -1,0 +1,64 @@
+// Omarchy 32-bit Lite status bar (waybar 0.9.15).
+// Mirrors the old Quickshell bar layout: workspaces on the left, the clock
+// in the center, audio/network/battery/tray on the right. Reload with
+// `omarchy-bar reload` (SIGUSR2); toggle visibility with `omarchy-bar toggle`.
+{
+  "layer": "top",
+  "position": "top",
+  "height": 26,
+  "spacing": 8,
+
+  "modules-left": ["sway/workspaces", "sway/mode"],
+  "modules-center": ["clock"],
+  "modules-right": ["pulseaudio", "network", "battery", "tray"],
+
+  "sway/workspaces": {
+    "disable-scroll": false,
+    "format": "{name}"
+  },
+
+  "sway/mode": {
+    "format": "{}"
+  },
+
+  "clock": {
+    "interval": 30,
+    "format": "{:%A %H:%M}",
+    "format-alt": "{:%d %B  W%V  %Y}",
+    "tooltip": false
+  },
+
+  "pulseaudio": {
+    "format": "{icon} {volume}%",
+    "format-muted": "󰝟",
+    "format-icons": {
+      "default": ["󰕿", "󰖀", "󰕾"]
+    },
+    "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+    "tooltip": false
+  },
+
+  "network": {
+    "format-wifi": "󰖩 {essid}",
+    "format-ethernet": "󰈀",
+    "format-disconnected": "󰖪",
+    "tooltip-format": "{ifname}: {ipaddr}"
+  },
+
+  "battery": {
+    "interval": 30,
+    "states": {
+      "warning": 30,
+      "critical": 15
+    },
+    "format": "{icon} {capacity}%",
+    "format-charging": "󰂄 {capacity}%",
+    "format-icons": ["󰁺", "󰁼", "󰁾", "󰂀", "󰁹"],
+    "tooltip": false
+  },
+
+  "tray": {
+    "icon-size": 16,
+    "spacing": 8
+  }
+}

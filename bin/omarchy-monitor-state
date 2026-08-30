@@ -3,21 +3,23 @@
 # omarchy:summary=Print monitor panel state for the shell
 # omarchy:group=monitor
 
-monitors_json=$(hyprctl monitors all -j)
+monitors_json=$(swaymsg -t get_outputs)
 focused_monitor=$(printf '%s\n' "$monitors_json" | jq -r '[.[] | select(.focused == true)][0].name // ""')
 
 { omarchy-brightness-display --monitor "$focused_monitor" 2>/dev/null; echo; } | head -n 1
 
+# Fourth line is the mirror source; sway has no output mirroring, so it is
+# always empty.
 printf '%s\n' "$monitors_json" | jq -r '
   def internal: test("^(eDP|LVDS|DSI)-");
   ([.[] | select(.name | internal)][0].name // ""),
   ([.[] | select((.name | internal) | not)][0].name // ""),
-  ([.[] | select((.name | internal) and .disabled != true)][0].name // ""),
-  ([.[] | select(.mirrorOf != "none") | if (.name | internal) then .mirrorOf else .name end][0] // "")
+  ([.[] | select((.name | internal) and .active == true)][0].name // ""),
+  ""
 '
 
 printf '%s\n' "$focused_monitor"
 omarchy-hyprland-monitor-scaling 2>/dev/null || echo
 
 printf '%s\n' "$monitors_json" | jq -c \
-  '[.[] | {name, enabled:(.disabled != true), focused:(.focused == true), width, height}]'
+  '[.[] | {name, enabled:(.active == true), focused:(.focused == true), width:(.current_mode.width // 0), height:(.current_mode.height // 0)}]'

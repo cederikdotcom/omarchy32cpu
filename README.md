@@ -1,3 +1,21 @@
+# Omarchy CPU
+
+This fork is **Omarchy CPU**: pure CPU-bound Omarchy. The full Omarchy
+workflow - tiling, workspaces, keybindings, the 24-color theme engine,
+the menu system and CLI tooling - with no GPU dependence at all and no
+preinstalled applications. sway with the wlroots pixman renderer
+replaces Hyprland; waybar, fuzzel, mako and swaylock replace
+Quickshell; greetd replaces SDDM. It runs where stock Omarchy cannot:
+VMs without GPU passthrough, cloud desktops, thin clients, and old
+hardware. First target: archlinux32 i686 on the 2006 MacBook A1181
+(32-bit Core Duo, GMA 950, 32-bit Apple EFI).
+
+Start at docs/a1181-gap-analysis.md and docs/runbooks/.
+
+---
+
+Upstream README below.
+
 # Omarchy
 
 Omarchy is a beautiful, modern & opinionated Linux distribution by DHH.

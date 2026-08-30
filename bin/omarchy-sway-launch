@@ -1,0 +1,75 @@
+#!/bin/bash
+
+# omarchy:summary=Start the Omarchy sway session (pixman renderer + session environment).
+# omarchy:hidden=true
+
+# Session launcher for Omarchy Omarchy CPU. Exports everything the compositor
+# and its children need (the old Hyprland session did this via uwsm env.d and
+# default/hypr/envs.lua), then execs sway. Used by the omarchy wayland session
+# (default/wayland-sessions/omarchy.desktop).
+
+# OMARCHY_PATH + PATH bootstrap; same file the login shells source.
+[[ -r /usr/share/omarchy/default/bash/env-bootstrap ]] && . /usr/share/omarchy/default/bash/env-bootstrap
+: "${OMARCHY_PATH:=/usr/share/omarchy}"
+export OMARCHY_PATH
+
+# Session defaults (previously default/uwsm/default).
+export TERMINAL=xdg-terminal-exec
+export EDITOR="omarchy-launch-editor --inline"
+
+# GMA 950 cannot serve GLES: composite on the CPU, and don't die when
+# libinput briefly reports no devices.
+export WLR_RENDERER=pixman
+export WLR_LIBINPUT_NO_DEVICES=1
+
+# Force apps onto Wayland (from default/hypr/envs.lua).
+export GDK_BACKEND="wayland,x11,*"
+export QT_QPA_PLATFORM="wayland;xcb"
+export QT_QPA_PLATFORMTHEME=gtk3
+export MOZ_ENABLE_WAYLAND=1
+export ELECTRON_OZONE_PLATFORM_HINT=wayland
+export OZONE_PLATFORM=wayland
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=sway
+export XDG_SESSION_DESKTOP=sway
+export XCURSOR_SIZE=24
+export XCOMPOSEFILE="$HOME/.XCompose"
+
+# Keyboard layout from the installer's /etc/vconsole.conf (wlroots reads the
+# XKB_DEFAULT_* variables). Translation of default/hypr/input.lua.
+xkb_layout=us
+xkb_variant=""
+if [[ -r /etc/vconsole.conf ]]; then
+  while IFS='=' read -r key value; do
+    value=${value%\"} value=${value#\"}
+    case $key in
+      XKBLAYOUT) xkb_layout=$value ;;
+      XKBVARIANT) xkb_variant=$value ;;
+    esac
+  done </etc/vconsole.conf
+fi
+
+# CapsLock is the compose key; Caps Lock itself moves to both Shifts, and the
+# _cancel variant releases a misfire on the next lone Shift.
+xkb_options="compose:caps,shift:both_capslock_cancel"
+
+# Keybindings resolve against the first layout, so a non-Latin layout needs a
+# Latin one in front or the Latin-keysym bindings go dead. Keep in sync with
+# the list in etc/mkinitcpio.conf.d/omarchy_hooks.conf.
+non_latin_layouts=" af am ara bd bg by et ge gr il in iq ir kg kh kz la lk mk mm mn mv np rs ru sy th tj ua "
+first_layout=${xkb_layout%%,*}
+if [[ $non_latin_layouts == *" $first_layout "* ]]; then
+  xkb_layout="us,$xkb_layout"
+  xkb_variant=",$xkb_variant"
+  # Reach the original layout with Left Alt + Right Alt.
+  xkb_options="$xkb_options,grp:alts_toggle"
+fi
+
+export XKB_DEFAULT_LAYOUT=$xkb_layout
+export XKB_DEFAULT_VARIANT=$xkb_variant
+export XKB_DEFAULT_OPTIONS=$xkb_options
+
+# Optional user session environment overrides.
+[[ -f "$HOME/.config/omarchy/session-env" ]] && . "$HOME/.config/omarchy/session-env"
+
+exec sway "$@"

@@ -1,0 +1,67 @@
+# Omarchy 32-bit Lite: your sway configuration.
+#
+# This file is yours: package updates never overwrite it (restore the shipped
+# version with: omarchy-refresh-config sway/config). It loads the Omarchy
+# defaults first, then your overrides. A later line wins in sway, so anything
+# you set below replaces the default.
+#
+# See current bindings and descriptions: omarchy menu keybindings --print
+
+# Load the Omarchy defaults. Don't edit the defaults file directly; override
+# things below instead so package updates can keep improving the defaults.
+include ${OMARCHY_PATH:-/usr/share/omarchy}/default/sway/config
+
+### Monitors ###################################################################
+# List outputs and modes with: swaymsg -t get_outputs
+# The MacBook1,1 panel is 1280x800 and needs no scaling.
+# output * scale 1
+#
+# Configure a specific output:
+# output DP-2 mode 1280x800@60Hz position 0,0 scale 1
+#
+# Portrait/rotated secondary monitor:
+# output DP-2 transform 90
+
+### Input ######################################################################
+# See: man 5 sway-input
+# The keyboard layout comes from /etc/vconsole.conf via omarchy-sway-launch;
+# override it here if you want something else.
+# input type:keyboard {
+#   xkb_layout "us,dk"
+#   xkb_options "compose:caps,shift:both_capslock_cancel,grp:alts_toggle"
+#   repeat_rate 40
+#   repeat_delay 250
+# }
+#
+# input type:touchpad {
+#   natural_scroll enabled
+#   scroll_factor 0.4
+#   dwt disabled
+#   tap enabled
+# }
+
+### Bindings ###################################################################
+# Add a new binding:
+# bindsym $mod+Shift+r exec alacritty -e ssh your-server
+#
+# Change an existing binding by binding the key again (the last one wins):
+# bindsym $mod+space exec omarchy-menu toggle root
+#
+# Disable a default binding without replacing it:
+# unbindsym $mod+Shift+b
+
+### Look and feel ##############################################################
+# No gaps between windows and no borders:
+# gaps inner 0
+# gaps outer 0
+# default_border none
+
+### Autostart ##################################################################
+# Start extra programs with the session:
+# exec my-service
+
+### Window rules ###############################################################
+# Put an app on a fixed workspace:
+# assign [app_id="^qemu$"] workspace number 5
+# Float an app:
+# for_window [app_id="^my-app$"] floating enable

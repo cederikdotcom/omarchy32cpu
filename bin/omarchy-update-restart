@@ -28,9 +28,9 @@ elif [[ -f $HOME/.local/state/omarchy/reboot-required ]]; then
   confirm_reboot "Updates require reboot. Ready?"
 fi
 
-running_hyprland=$(readlink /proc/$(pgrep -x Hyprland)/exe 2>/dev/null)
-if [[ $running_hyprland == *"(deleted)"* ]]; then
-  confirm_reboot "Hyprland has been updated. Reboot?"
+running_sway=$(readlink /proc/$(pgrep -x sway | head -n 1)/exe 2>/dev/null)
+if [[ $running_sway == *"(deleted)"* ]]; then
+  confirm_reboot "Sway has been updated. Reboot?"
 fi
 
 for file in "$HOME"/.local/state/omarchy/restart-*-required; do

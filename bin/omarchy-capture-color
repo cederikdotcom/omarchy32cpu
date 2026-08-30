@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# omarchy:summary=Pick a pixel color from the screen and copy it as hex to the clipboard.
+
+point=$(slurp -p 2>/dev/null) || exit 0
+
+hex=$(grim -g "$point" -t ppm - 2>/dev/null | tail -c 3 | od -An -tx1 | tr -d ' \n')
+
+if [[ ${#hex} -eq 6 ]]; then
+  echo -n "#$hex" | wl-copy
+  omarchy-notification-send "Color picked" "#$hex copied to clipboard"
+  echo "#$hex"
+fi

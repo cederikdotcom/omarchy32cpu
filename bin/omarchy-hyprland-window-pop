@@ -8,33 +8,24 @@ height=${2:-900}
 x=${3:-}
 y=${4:-}
 
-active=$(hyprctl activewindow -j)
-pinned=$(echo "$active" | jq ".pinned")
-addr=$(echo "$active" | jq -r ".address")
-window="address:$addr"
+# All four are interpolated into swaymsg command strings, so only numbers pass.
+for value in "$width" "$height" ${x:+"$x"} ${y:+"$y"}; do
+  [[ $value =~ ^-?[0-9]+$ ]] || exit 1
+done
 
-hypr_dispatch() {
-  local lua="$1"
-  shift
+active=$(swaymsg -t get_tree | jq -c '[.. | objects | select(.type? == "con" or .type? == "floating_con") | select(.focused == true)] | first // empty')
+[[ -n $active ]] || exit 0
 
-  hyprctl dispatch "$lua" >/dev/null 2>&1 || hyprctl dispatch "$@" >/dev/null
-}
-
-if [[ $pinned == "true" ]]; then
-  hypr_dispatch "hl.dsp.window.pin({ window = \"$window\" })" pin "$window"
-  hypr_dispatch "hl.dsp.window.float({ window = \"$window\", action = \"toggle\" })" togglefloating "$window"
-  hypr_dispatch "hl.dsp.window.tag({ window = \"$window\", tag = \"-pop\" })" tagwindow -pop "$window"
-elif [[ -n $addr ]]; then
-  hypr_dispatch "hl.dsp.window.float({ window = \"$window\", action = \"toggle\" })" togglefloating "$window"
-  hypr_dispatch "hl.dsp.window.resize({ window = \"$window\", x = $width, y = $height })" resizeactive exact "$width" "$height" "$window"
+if [[ $(jq -r '.sticky // false' <<<"$active") == "true" ]]; then
+  swaymsg 'sticky disable; floating disable' >/dev/null
+else
+  swaymsg "floating enable; resize set ${width} px ${height} px" >/dev/null
 
   if [[ -n $x && -n $y ]]; then
-    hypr_dispatch "hl.dsp.window.move({ window = \"$window\", x = $x, y = $y })" moveactive "$x" "$y" "$window"
+    swaymsg "move absolute position $x $y" >/dev/null
   else
-    hypr_dispatch "hl.dsp.window.center({ window = \"$window\" })" centerwindow "$window"
+    swaymsg 'move position center' >/dev/null
   fi
 
-  hypr_dispatch "hl.dsp.window.pin({ window = \"$window\" })" pin "$window"
-  hypr_dispatch "hl.dsp.window.alter_zorder({ window = \"$window\", mode = \"top\" })" alterzorder top "$window"
-  hypr_dispatch "hl.dsp.window.tag({ window = \"$window\", tag = \"+pop\" })" tagwindow +pop "$window"
+  swaymsg 'sticky enable' >/dev/null
 fi

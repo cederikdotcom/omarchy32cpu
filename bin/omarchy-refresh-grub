@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# omarchy:summary=Rebuild the GRUB config and install the bootloader when it is missing.
+# omarchy:requires-sudo=true
+
+echo "Rebuilding GRUB config"
+
+sudo grub-mkconfig -o /boot/grub/grub.cfg
+
+# The 32-bit Apple EFI boots the removable fallback path, so GRUB lives at
+# /boot/EFI/BOOT/BOOTIA32.EFI rather than in an NVRAM boot entry.
+if ! sudo test -f /boot/EFI/BOOT/BOOTIA32.EFI; then
+  echo "Installing GRUB as BOOTIA32.EFI"
+  sudo grub-install --target=i386-efi --efi-directory=/boot --removable --no-nvram
+fi

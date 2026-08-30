@@ -1,4 +1,4 @@
-# Runbook: install Omarchy 32-bit Lite on the MacBook1,1
+# Runbook: install Omarchy CPU (32-bit) on the MacBook1,1
 
 Status: REHEARSED END TO END 2026-08-30 in the test-bench VM (32-bit
 UEFI firmware -> BOOTIA32.EFI -> GRUB -> i686 kernel -> greetd -> sway

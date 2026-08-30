@@ -11,6 +11,12 @@ if (($# == 0)); then
   exit 1
 fi
 
+# LocalSend is not preinstalled in Omarchy CPU; absorb the call gracefully.
+if ! omarchy-cmd-present localsend; then
+  echo "omarchy-menu-share: LocalSend not available in Omarchy CPU (install localsend)" >&2
+  exit 0
+fi
+
 MODE="$1"
 shift
 

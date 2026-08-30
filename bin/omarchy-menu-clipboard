@@ -3,4 +3,16 @@
 # omarchy:group=menu
 # omarchy:examples=omarchy menu clipboard
 
-omarchy-shell shell toggle omarchy.clipboard
+# Omarchy CPU has no Quickshell clipboard panel. When cliphist is installed
+# (it is optional in Lite), pick an entry with fuzzel and put it back on the
+# clipboard; otherwise say so and succeed so keybindings do not error.
+
+if ! omarchy-cmd-present cliphist; then
+  echo "omarchy-menu-clipboard: clipboard history not available in Omarchy CPU (install cliphist)" >&2
+  exit 0
+fi
+
+selection=$(cliphist list | fuzzel --dmenu --prompt "Clipboard > " --lines 12 --width 60) || exit 0
+[[ -n $selection ]] || exit 0
+
+printf '%s' "$selection" | cliphist decode | wl-copy

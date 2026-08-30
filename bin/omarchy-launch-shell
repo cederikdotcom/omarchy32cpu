@@ -38,7 +38,7 @@ compositor_alive() {
   local attempt
 
   for attempt in 1 2 3; do
-    hyprctl -j monitors >/dev/null 2>&1 && return 0
+    swaymsg -t get_outputs >/dev/null 2>&1 && return 0
     (( attempt < 3 )) && sleep 0.5
   done
 

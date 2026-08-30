@@ -3,4 +3,25 @@
 # omarchy:group=menu
 # omarchy:examples=omarchy menu emoji
 
-omarchy-shell shell toggle omarchy.emojis
+# Omarchy CPU picks emojis with fuzzel from the same dataset the Quickshell
+# plugin used (default/omarchy/emojis.json: [{"e": emoji, "k": keywords}]).
+# The selected emoji is inserted into the focused app by
+# omarchy-menu-emoji-insert (clipboard paste), which also leaves it on the
+# clipboard.
+
+set -euo pipefail
+
+emoji_data="$OMARCHY_PATH/default/omarchy/emojis.json"
+
+if [[ ! -f $emoji_data ]]; then
+  echo "omarchy-menu-emoji: emoji data not found: $emoji_data" >&2
+  exit 1
+fi
+
+selection=$(jq -r '.[] | .e + " " + .k' "$emoji_data" |
+  fuzzel --dmenu --prompt "Emoji > " --lines 12 --width 50) || exit 0
+
+emoji="${selection%% *}"
+[[ -n $emoji ]] || exit 0
+
+omarchy-menu-emoji-insert "$emoji"

@@ -3,9 +3,22 @@
 # omarchy:summary=Dismiss a notification by summary substring. Used by the first-run notifications to dismiss them after clicking for action.
 # omarchy:args=<summary>
 
+# Omarchy CPU dismisses through mako: list the visible notifications, match
+# the summary substring, and dismiss the matching ids.
+
 if (($# == 0)); then
   echo "Usage: omarchy-notification-dismiss <summary>"
   exit 1
 fi
 
-omarchy-shell -q notifications dismiss "$1"
+omarchy-cmd-present makoctl || exit 0
+
+makoctl list 2>/dev/null |
+  jq -r --arg summary "$1" '
+    .data[0][]? | select((.summary.data // "") | contains($summary)) | .id.data
+  ' 2>/dev/null |
+  while read -r id; do
+    makoctl dismiss -n "$id" >/dev/null 2>&1 || true
+  done
+
+exit 0

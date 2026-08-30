@@ -1,0 +1,73 @@
+/* Omarchy 32-bit Lite waybar style.
+ *
+ * Colors come from the current theme: omarchy-theme-set renders
+ * default/themed/waybar.css.tpl to ~/.local/state/omarchy/current/theme/
+ * waybar.css (only @define-color lines). The fallbacks below cover a fresh
+ * install before the first theme-set; the @import after them wins once the
+ * theme file exists. GTK CSS does not expand ~, hence the relative path
+ * from ~/.config/waybar/. */
+
+@define-color background #121212;
+@define-color foreground #d0d0d0;
+@define-color accent #7aa2f7;
+@define-color muted #707070;
+@define-color urgent #f7768e;
+
+@import url("../../.local/state/omarchy/current/theme/waybar.css");
+
+* {
+  font-family: monospace;
+  font-size: 12px;
+  min-height: 0;
+}
+
+window#waybar {
+  background-color: @background;
+  color: @foreground;
+}
+
+#workspaces button {
+  padding: 0 6px;
+  background: transparent;
+  color: @muted;
+  border: none;
+  border-radius: 0;
+}
+
+#workspaces button.focused {
+  color: @accent;
+}
+
+#workspaces button.urgent {
+  color: @urgent;
+}
+
+#mode {
+  color: @urgent;
+  padding: 0 8px;
+}
+
+#clock,
+#pulseaudio,
+#network,
+#battery,
+#tray {
+  padding: 0 8px;
+  color: @foreground;
+}
+
+#battery.warning {
+  color: @urgent;
+}
+
+#battery.critical {
+  color: @urgent;
+}
+
+#network.disconnected {
+  color: @muted;
+}
+
+#pulseaudio.muted {
+  color: @muted;
+}

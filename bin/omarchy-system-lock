@@ -5,10 +5,27 @@
 # omarchy:name=lock
 # omarchy:examples=omarchy system lock
 
-omarchy-shell lock lock >/dev/null
+# Omarchy Omarchy CPU locks with swaylock. The theme pipeline renders
+# per-theme swaylock arguments (default/themed/swaylock.args.tpl) into the
+# current theme directory; fall back to a plain dark lock when absent.
+
+if ! pgrep -x swaylock >/dev/null; then
+  swaylock_args=(-f --ignore-empty-password)
+
+  theme_args="$HOME/.local/state/omarchy/current/theme/swaylock.args"
+  if [[ -f $theme_args ]]; then
+    while IFS= read -r arg; do
+      [[ -n $arg && $arg != \#* ]] && swaylock_args+=("$arg")
+    done <"$theme_args"
+  else
+    swaylock_args+=(--color 1a1a1a)
+  fi
+
+  swaylock "${swaylock_args[@]}" >/dev/null 2>&1
+fi
 
 # Set keyboard layout to default (first layout)
-hyprctl switchxkblayout all 0 > /dev/null 2>&1
+swaymsg 'input type:keyboard xkb_switch_layout 0' >/dev/null 2>&1
 
 # Ensure 1password is locked. Use timeout because `1password --lock` can
 # otherwise leave a full Electron helper tree running after each lock.

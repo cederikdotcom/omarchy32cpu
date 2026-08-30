@@ -1,8 +1,14 @@
 #!/bin/bash
 
-# omarchy:summary=Send an IPC call to the running Omarchy shell
+# omarchy:summary=Route legacy Omarchy shell IPC calls to the Omarchy CPU stack
 # omarchy:args=[-q] <target> <method> [args...]
 # omarchy:examples=omarchy shell shell ping | omarchy-shell shell toggle omarchy.menu '{"menu":"root"}'
+
+# Omarchy Omarchy CPU has no Quickshell. The desktop shell is waybar (bar),
+# fuzzel (menus), mako (notifications/OSD), and swaylock (lock). This shim
+# keeps the old `omarchy-shell <target> <method>` calling convention alive by
+# routing what the new stack can serve and quietly absorbing what it cannot,
+# so the many callers across bin/ keep working unchanged.
 
 QUIET=0
 if [[ ${1:-} == "-q" ]]; then
@@ -11,72 +17,167 @@ if [[ ${1:-} == "-q" ]]; then
 fi
 
 fail() {
-  (( QUIET )) && exit 0
+  ((QUIET)) && exit 0
   echo "$1" >&2
   exit 1
 }
 
-if (( $# == 0 )) || [[ $1 == "-h" || $1 == "--help" ]]; then
+unavailable() {
+  ((QUIET)) || echo "omarchy-shell: $* not available in Omarchy CPU" >&2
+  exit 0
+}
+
+if (($# == 0)) || [[ $1 == "-h" || $1 == "--help" ]]; then
   cat <<USAGE
 Usage: omarchy-shell [-q] <target> <method> [args...]
 
-Forwards an IPC call to the running Omarchy shell. The shell is expected
-to already be running; this command does not start it.
+Routes a legacy Omarchy shell IPC call to the Omarchy CPU desktop stack
+(waybar, fuzzel, mako, swaylock). Calls with no Lite equivalent print a
+note on stderr and return success so callers do not break.
 
 Options:
   -q  Quiet best-effort mode. Suppress output and return success even when
-      the shell, target, method, or arguments are unavailable.
+      the target, method, or arguments are unavailable.
 
 Examples:
   omarchy-shell shell ping
-  omarchy-shell -q omarchy.indicators refresh
-  omarchy-shell shell listPlugins
   omarchy-shell shell toggle omarchy.menu '{"menu":"root"}'
+  omarchy-shell notifications dismiss "Update available"
+  omarchy-shell lock lock
 USAGE
   exit 0
 fi
 
-(( $# >= 2 )) || fail "Usage: omarchy-shell <target> <method> [args...]"
-[[ -n ${OMARCHY_PATH:-} ]] || fail "OMARCHY_PATH is not set"
-[[ -f $OMARCHY_PATH/shell/shell.qml ]] || fail "omarchy-shell config not found: $OMARCHY_PATH/shell/shell.qml"
+(($# >= 2)) || fail "Usage: omarchy-shell <target> <method> [args...]"
 
-# qs matches instances by display, and a caller from outside the session (an
-# ssh or TTY omarchy-restart-shell, and the migrations it runs for) has none,
-# so recover it from the compositor socket.
+target="$1"
+method="$2"
+shift 2
+
+# A caller from outside the session (ssh, TTY) has no display; recover it from
+# the compositor socket so pkill/makoctl/busctl land in the right session.
 if [[ -z ${WAYLAND_DISPLAY:-} ]]; then
   socket=$(ls -t "${XDG_RUNTIME_DIR:-/run/user/$UID}"/wayland-[0-9]* 2>/dev/null | grep -v '\.lock$' | head -n1)
   [[ -n $socket ]] && export WAYLAND_DISPLAY=${socket##*/}
 fi
 
-if [[ $1 == "shell" && ( $2 == "summon" || $2 == "toggle" ) ]] && (( $# == 3 )); then
-  set -- "$1" "$2" "$3" "{}"
-fi
+notification_server_ready() {
+  busctl --user call \
+    org.freedesktop.Notifications \
+    /org/freedesktop/Notifications \
+    org.freedesktop.Notifications \
+    GetServerInformation >/dev/null 2>&1
+}
 
-# The -- keeps function names that shadow qs subcommands (e.g. show) as
-# positionals. qs reports connection failures with a nonzero exit, but IPC-level
-# failures (unknown target/function, bad arguments) go to stdout with exit 0.
-ipc_timeout=${OMARCHY_SHELL_IPC_TIMEOUT:-2s}
-output=$(timeout --kill-after=1s "$ipc_timeout" qs ipc -n -p "$OMARCHY_PATH/shell" call -- "$@" 2>/dev/null)
-ipc_status=$?
+menu_route() {
+  # The payload is JSON like {"menu":"setup.power"}; default route is root.
+  local route
+  route=$(jq -r '.menu // "root"' <<<"${1:-\{\}}" 2>/dev/null)
+  printf '%s' "${route:-root}"
+}
 
-if (( ipc_status == 124 || ipc_status == 137 )); then
-  fail "omarchy-shell is not responding"
-elif (( ipc_status != 0 )); then
-  fail "omarchy-shell is not running"
-fi
-
-case $output in
-  "Target not found." | "Function not found." | "Too few arguments provided"* | "Too many arguments provided"*)
-    fail "$output"
+case "$target $method" in
+  "shell ping")
+    if pgrep -x waybar >/dev/null || notification_server_ready; then
+      ((QUIET)) || echo "pong"
+      exit 0
+    fi
+    fail "omarchy-shell is not running"
     ;;
-  # A starting shell answers on stdout and exits 0, so a ping reads it as up
-  # and the next call's answer as a result. It is as unreachable as none.
-  "Not ready to accept queries yet"*)
-    fail "omarchy-shell is not ready"
+  "shell toggle" | "shell summon")
+    case "${1:-}" in
+      omarchy.menu)
+        exec omarchy-menu "$method" "$(menu_route "${2:-}")"
+        ;;
+      omarchy.clipboard) exec omarchy-menu-clipboard ;;
+      omarchy.emojis) exec omarchy-menu-emoji ;;
+      *)
+        unavailable "$target $method ${1:-}"
+        ;;
+    esac
+    ;;
+  "shell hide")
+    pkill -x fuzzel 2>/dev/null || true
+    exit 0
+    ;;
+  "notifications ping")
+    notification_server_ready && exit 0
+    fail "notification server is not running"
+    ;;
+  "notifications dismiss")
+    exec omarchy-notification-dismiss "${1:-}"
+    ;;
+  "notifications toggleDnd")
+    if omarchy-cmd-present makoctl; then
+      makoctl mode -t do-not-disturb >/dev/null 2>&1 || fail "mako is not running"
+      if makoctl mode 2>/dev/null | grep -qx "do-not-disturb"; then
+        ((QUIET)) || echo "silenced"
+      else
+        ((QUIET)) || echo "unsilenced"
+      fi
+      exit 0
+    fi
+    fail "makoctl is not available"
+    ;;
+  "osd show")
+    # Payload: {"icon":..,"message":..,"value":..,"max":..,"duration":..}
+    args=()
+    icon=$(jq -r '.icon // ""' <<<"${1:-\{\}}" 2>/dev/null)
+    message=$(jq -r '.message // ""' <<<"${1:-\{\}}" 2>/dev/null)
+    value=$(jq -r '.value // ""' <<<"${1:-\{\}}" 2>/dev/null)
+    duration=$(jq -r '.duration // ""' <<<"${1:-\{\}}" 2>/dev/null)
+    [[ -n $icon ]] && args+=(-i "$icon")
+    [[ -n $message ]] && args+=(-m "$message")
+    [[ -n $value ]] && args+=(-p "$value")
+    [[ -n $duration ]] && args+=(-d "$duration")
+    exec omarchy-osd "${args[@]}"
+    ;;
+  "osd close")
+    id_file="${XDG_RUNTIME_DIR:-/tmp}/omarchy-osd.id"
+    if [[ -s $id_file ]] && omarchy-cmd-present makoctl; then
+      makoctl dismiss -n "$(<"$id_file")" >/dev/null 2>&1 || true
+    fi
+    exit 0
+    ;;
+  "lock lock")
+    exec omarchy-system-lock
+    ;;
+  "lock status")
+    # Mirrors the old lock plugin's JSON shape: callers check `.secure or
+    # .requested` (omarchy-restart-shell) or just the exit status.
+    if pgrep -x swaylock >/dev/null; then
+      ((QUIET)) || echo '{"secure": true, "requested": true}'
+    else
+      ((QUIET)) || echo '{"secure": false, "requested": false}'
+    fi
+    exit 0
+    ;;
+  "background set")
+    background="${1:-}"
+    [[ -f $background ]] || fail "background not found: $background"
+    if omarchy-cmd-present swaybg; then
+      pkill -x swaybg 2>/dev/null || true
+      setsid -f swaybg -i "$background" -m fill >/dev/null 2>&1
+      exit 0
+    fi
+    fail "swaybg is not available"
+    ;;
+  "shell reloadConfig" | "shell rescanPlugins")
+    # shell.json edits are inert without Quickshell; nudge waybar instead.
+    pkill -SIGUSR2 -x waybar 2>/dev/null || true
+    exit 0
+    ;;
+  *)
+    case "$method" in
+      refresh)
+        # Widget refreshes (omarchy.clock, omarchy.indicators, nightlight, ...)
+        # map to a waybar config reload, which re-reads every module.
+        pkill -SIGUSR2 -x waybar 2>/dev/null || true
+        exit 0
+        ;;
+      *)
+        unavailable "$target $method"
+        ;;
+    esac
     ;;
 esac
-
-if (( !QUIET )) && [[ -n $output ]]; then
-  echo "$output"
-fi
-exit 0

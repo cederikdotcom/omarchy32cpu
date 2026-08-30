@@ -1,5 +1,11 @@
 #!/bin/bash
 
-# omarchy:summary=Restart the hyprsunset service (used for blue light filtering/night light).
+# omarchy:summary=Restart the wlsunset nightlight (used for blue light filtering).
 
-omarchy-restart-app hyprsunset
+pkill -x wlsunset 2>/dev/null
+
+# Only relaunch when the nightlight toggle is on; temperatures match
+# omarchy-toggle-nightlight.
+if [[ -f "$HOME/.local/state/omarchy/toggles/nightlight" ]]; then
+  setsid uwsm-app -- wlsunset -t 4000 -T 4001 >/dev/null 2>&1 &
+fi

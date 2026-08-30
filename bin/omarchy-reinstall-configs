@@ -18,8 +18,7 @@ echo "Resetting Omarchy user configs to shipped defaults..."
 # Trailing dot copies dotfiles; the shell wouldn't glob them with /etc/skel/*.
 cp -af /etc/skel/. ~/
 
-omarchy-refresh-limine
-omarchy-refresh-plymouth
+omarchy-refresh-grub
 
 if omarchy-cmd-present omarchy-nvim-refresh; then
   omarchy-nvim-refresh

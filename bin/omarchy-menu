@@ -2,32 +2,30 @@
 
 # omarchy:summary=Control the Omarchy menu (toggle / summon / close / refresh)
 # omarchy:args=[toggle|summon|close|refresh|ping] [route]
-# omarchy:examples=omarchy menu | omarchy menu toggle system | omarchy menu summon style.theme | omarchy menu refresh
+# omarchy:examples=omarchy menu | omarchy menu toggle system | omarchy menu summon style.theme
 
-# Thin wrapper around the standard plugin IPC surface. The menu is the
-# first-party `omarchy.menu` plugin; routes are passed as JSON payload.
+# Omarchy CPU renders the Omarchy menu with fuzzel --dmenu instead of the
+# Quickshell menu plugin. The menu tree still comes from the same JSONC
+# definitions (default/omarchy/omarchy-menu.jsonc, overlaid by the user's
+# ~/.config/omarchy/extensions/omarchy-menu.jsonc): dotted ids define the
+# hierarchy, `when` conditions hide rows, `checked` conditions append a tick,
+# and actions run detached. Entries that only work on the Hyprland/Quickshell
+# stack are pruned.
 
 set -euo pipefail
 
 verb="${1-toggle}"
 route="${2-root}"
 
-menu_payload() {
-  jq -nc --arg menu "$1" '{ menu: $menu }'
-}
-
 case "$verb" in
-  toggle)
-    exec omarchy-shell shell toggle omarchy.menu "$(menu_payload "$route")"
-    ;;
-  summon)
-    exec omarchy-shell shell summon omarchy.menu "$(menu_payload "$route")"
-    ;;
+  toggle | summon) ;;
   close)
-    exec omarchy-shell shell hide omarchy.menu
+    pkill -x fuzzel 2>/dev/null || true
+    exit 0
     ;;
   refresh | ping)
-    exec omarchy-shell shell call omarchy.menu "$verb" "{}"
+    # No cache to refresh: the JSONC is re-read on every open.
+    exit 0
     ;;
   -h | --help | help)
     cat <<USAGE
@@ -37,7 +35,7 @@ Verbs:
   toggle [route]   Open the menu at <route>, or close it if already open. Default verb.
   summon [route]   Always open the menu (no close-if-visible toggle).
   close            Close the menu if it is visible.
-  refresh          Re-parse the menu JSONC files.
+  refresh          Re-parse the menu JSONC files (a no-op: they are re-read on open).
   ping             Health check.
 
 Route is an item id (e.g. setup.power) or alias (e.g. power). Defaults to
@@ -50,3 +48,195 @@ USAGE
     exit 2
     ;;
 esac
+
+if pgrep -x fuzzel >/dev/null; then
+  pkill -x fuzzel 2>/dev/null || true
+  # toggle on an open menu means close.
+  [[ $verb == "toggle" ]] && exit 0
+fi
+
+DEFAULT_MENU="$OMARCHY_PATH/default/omarchy/omarchy-menu.jsonc"
+USER_MENU="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
+
+# JSONC to JSON: drop full-line // comments and trailing commas, then merge
+# the user overlay over the defaults (same flat id-keyed object shape).
+menu_json() {
+  local file merged="{}"
+  for file in "$DEFAULT_MENU" "$USER_MENU"; do
+    [[ -f $file ]] || continue
+    merged=$(
+      sed -e 's|^[[:space:]]*//.*$||' "$file" |
+        sed -z -e 's/,[[:space:]]*}/}/g' -e 's/,[[:space:]]*\]/\]/g' |
+        jq --argjson merged "$merged" '$merged + .' 2>/dev/null
+    ) || merged="$merged"
+  done
+  printf '%s' "$merged"
+}
+
+MENU=$(menu_json)
+[[ $MENU != "{}" && -n $MENU ]] || { echo "omarchy-menu: no menu definition found" >&2; exit 1; }
+
+# Entries that only exist on the Hyprland/Quickshell stack are pruned in Lite:
+# hypr config editors, the Quickshell speedtest/wifiqr panels, hyprpicker,
+# and the shell plugin manager (plus the submenus those leave empty).
+PRUNE_ACTIONS='\.config/hypr|hyprpicker|wiki\.hypr|omarchy-shell shell summon|omarchy-menu-plugin|omarchy-plugin-add|omarchy-plymouth'
+PRUNE_IDS='^(setup\.plugin|trigger\.tests|style\.bar)($|\.)'
+
+resolve_route() {
+  local requested="$1" resolved
+  [[ $requested == "root" ]] && { printf 'root'; return; }
+  resolved=$(jq -r --arg r "$requested" '
+    if has($r) then $r
+    else (to_entries[] | select((.value.aliases // []) | index($r)) | .key) // "root"
+    end' <<<"$MENU" 2>/dev/null | head -n1)
+  printf '%s' "${resolved:-root}"
+}
+
+parent_of() {
+  local id="$1"
+  if [[ $id == *.* ]]; then
+    printf '%s' "${id%.*}"
+  else
+    printf 'root'
+  fi
+}
+
+label_of() {
+  local id="$1"
+  if [[ $id == "root" ]]; then
+    printf 'Go'
+  else
+    jq -r --arg id "$id" '.[$id].title // .[$id].label // $id' <<<"$MENU"
+  fi
+}
+
+# TSV rows for the visible children of a route:
+# id, icon, label, kind (action|link|provider|submenu), payload, checked-cond
+children_of() {
+  local route="$1"
+  jq -r --arg route "$route" '
+    def parent(k): if (k | contains(".")) then (k | split(".")[:-1] | join(".")) else "root" end;
+    def kind(v): if (v.action // "") != "" then "action"
+      elif (v.target // "") != "" then "link"
+      elif (v.provider // "") != "" then "provider"
+      else "submenu" end;
+    def payload(v): if (v.action // "") != "" then v.action
+      elif (v.target // "") != "" then v.target
+      else (v.provider // "") end;
+    to_entries[]
+    | select(parent(.key) == $route)
+    | [.key, (.value.icon // ""), (.value.label // .key), kind(.value), payload(.value), (.value.when // ""), (.value.checked // "")]
+    | @tsv' <<<"$MENU"
+}
+
+first_word_present() {
+  local action="$1" word
+  if [[ $action =~ ^([A-Za-z0-9_./-]+)([[:space:]]|$) ]]; then
+    word="${BASH_REMATCH[1]}"
+    command -v "$word" >/dev/null 2>&1 && return 0
+    return 1
+  fi
+  # Complex actions (assignments, subshells) are not vetted by command name.
+  return 0
+}
+
+run_provider() {
+  local provider="$1"
+  case "$provider" in
+    apps)
+      # fuzzel itself is the app launcher.
+      exec fuzzel
+      ;;
+    fonts)
+      local font
+      font=$(omarchy-font-list 2>/dev/null | omarchy-menu-select "Font" -- --width 520 --maxheight 520) || exit 0
+      [[ -n $font ]] && omarchy-font-set "$font"
+      exit 0
+      ;;
+    *)
+      echo "omarchy-menu: provider '$provider' not available in Omarchy CPU" >&2
+      exit 0
+      ;;
+  esac
+}
+
+open_menu() {
+  local route="$1"
+  local ids=() kinds=() payloads=() rows=() id icon label kind payload when checked
+
+  while IFS=$'\t' read -r id icon label kind payload when checked; do
+    [[ -n $id ]] || continue
+    [[ $id =~ $PRUNE_IDS ]] && continue
+    if [[ $kind == "action" && $payload =~ $PRUNE_ACTIONS ]]; then continue; fi
+    if [[ $kind == "action" ]] && ! first_word_present "$payload"; then continue; fi
+    if [[ -n $when ]] && ! bash -c "$when" >/dev/null 2>&1; then continue; fi
+    if [[ -n $checked ]] && bash -c "$checked" >/dev/null 2>&1; then
+      label="$label ✓"
+    fi
+
+    ids+=("$id")
+    kinds+=("$kind")
+    payloads+=("$payload")
+    if [[ -n $icon ]]; then
+      rows+=("$icon  $label")
+    else
+      rows+=("$label")
+    fi
+  done < <(children_of "$route")
+
+  if [[ $route != "root" ]]; then
+    ids=("__back__" "${ids[@]}")
+    kinds=("back" "${kinds[@]}")
+    payloads=("$(parent_of "$route")" "${payloads[@]}")
+    rows=("󰁍  Back" "${rows[@]}")
+  fi
+
+  if ((${#rows[@]} == 0)); then
+    omarchy-notification-send "Menu '$route' has no entries" 2>/dev/null || true
+    exit 0
+  fi
+
+  local lines=${#rows[@]}
+  ((lines > 16)) && lines=16
+
+  local index
+  index=$(printf '%s\n' "${rows[@]}" |
+    fuzzel --dmenu --index --prompt "$(label_of "$route") > " --lines "$lines" --width 40) || exit 0
+  [[ $index =~ ^[0-9]+$ ]] || exit 0
+  ((index < ${#ids[@]})) || exit 0
+
+  case "${kinds[$index]}" in
+    back)
+      open_menu "${payloads[$index]}"
+      ;;
+    submenu)
+      open_menu "${ids[$index]}"
+      ;;
+    provider)
+      run_provider "${payloads[$index]}"
+      ;;
+    link)
+      setsid -f bash -c "xdg-open $(printf '%q' "${payloads[$index]}")" >/dev/null 2>&1
+      ;;
+    action)
+      setsid -f bash -c "${payloads[$index]}" >/dev/null 2>&1
+      ;;
+  esac
+}
+
+route=$(resolve_route "$route")
+
+# A provider route summoned directly (e.g. `omarchy menu summon apps`).
+route_provider=$(jq -r --arg id "$route" '.[$id].provider // ""' <<<"$MENU" 2>/dev/null)
+if [[ -n $route_provider ]]; then
+  run_provider "$route_provider"
+fi
+
+# An action route summoned directly runs its action.
+route_action=$(jq -r --arg id "$route" '.[$id].action // ""' <<<"$MENU" 2>/dev/null)
+if [[ -n $route_action ]]; then
+  setsid -f bash -c "$route_action" >/dev/null 2>&1
+  exit 0
+fi
+
+open_menu "$route"

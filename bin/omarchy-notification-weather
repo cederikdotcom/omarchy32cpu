@@ -1,5 +1,19 @@
 #!/bin/bash
 
-# omarchy:summary=Toggle the current weather panel
+# omarchy:summary=Show the current weather notification
 
-omarchy-shell shell toggle omarchy.weather
+# Omarchy CPU has no Quickshell weather panel; show a one-line wttr.in
+# report as a notification instead.
+
+if ! omarchy-cmd-present curl; then
+  echo "omarchy-notification-weather: weather not available in Omarchy CPU (install curl)" >&2
+  exit 0
+fi
+
+weather=$(curl -fsS --max-time 5 'https://wttr.in/?format=3' 2>/dev/null)
+
+if [[ -n $weather ]]; then
+  omarchy-notification-send -g 󰖕 -u low "$weather"
+else
+  omarchy-notification-send -g 󰖕 -u low "Weather unavailable"
+fi

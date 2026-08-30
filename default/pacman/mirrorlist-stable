@@ -1,1 +1,3 @@
-Server = https://stable-mirror.omarchy.org/$repo/os/$arch
+# All channels track archlinux32 until the fork package repo for override
+# packages (fontconfig first) is stood up.
+Server = https://mirror.archlinux32.org/i686/$repo

@@ -2,11 +2,11 @@
 
 # omarchy:summary=Close all open windows
 
-hyprctl clients -j | \
-  jq -r ".[].address" | \
-  while read -r addr; do
-    hyprctl dispatch "hl.dsp.window.close({ window = \"address:$addr\" })" >/dev/null
+swaymsg -t get_tree |
+  jq -r '.. | objects | select(.type? == "con" or .type? == "floating_con") | select(.pid != null) | .id' |
+  while read -r id; do
+    swaymsg "[con_id=$id] kill" >/dev/null
   done
 
 # Move to first workspace
-hyprctl dispatch 'hl.dsp.focus({ workspace = "1" })' >/dev/null 2>&1 || hyprctl dispatch workspace 1
+swaymsg 'workspace number 1' >/dev/null

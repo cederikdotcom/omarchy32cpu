@@ -2,4 +2,8 @@
 
 # omarchy:summary=Toggles the window gaps globally between no gaps and the default.
 
-omarchy-hyprland-toggle window-no-gaps
+# The toggle reloads sway, which restores the configured gaps when turned off;
+# turning it on zeroes the gaps live on top of that reload.
+case $(omarchy-hyprland-toggle window-no-gaps) in
+  on) swaymsg 'gaps inner all set 0; gaps outer all set 0' >/dev/null ;;
+esac

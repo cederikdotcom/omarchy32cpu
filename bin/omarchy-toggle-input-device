@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# omarchy:summary=Enable, disable, or toggle a Hyprland input device
+# omarchy:summary=Enable, disable, or toggle an input device
 # omarchy:args=<touchpad|touchscreen> [on|off|toggle]
 # omarchy:hidden=true
 
@@ -20,12 +20,12 @@ case "$KIND" in
     ;;
 esac
 
-# The persisted disable is the device name stored as plain data; on every
-# reload default/hypr/disabled-input-device.lua reads it back and disables the
-# device. Names come from USB descriptors and must not be interpolated into
-# shell or Lua. The path is hardcoded to ~/.local/state like the sibling
-# toggle tools, so it keeps working when XDG_STATE_HOME diverges.
-NAME_FILE="$HOME/.local/state/omarchy/toggles/hypr/$KIND-disabled-name"
+# The persisted disable is the device identifier stored as plain data, so the
+# sway config can read it back and re-disable the device on reload. Names come
+# from USB descriptors and must not be interpolated into shell or config. The
+# path is hardcoded to ~/.local/state like the sibling toggle tools, so it
+# keeps working when XDG_STATE_HOME diverges.
+NAME_FILE="$HOME/.local/state/omarchy/toggles/sway/$KIND-disabled-name"
 
 device="$("omarchy-hw-$KIND")"
 
@@ -43,9 +43,10 @@ require_device() {
 
 apply_device() {
   local enabled=$1
-  local quoted=${device//\\/\\\\}
-  quoted=${quoted//\"/\\\"}
-  hyprctl eval "hl.device({ name = \"$quoted\", enabled = $enabled })" >/dev/null
+  local events=disabled
+
+  [[ $enabled == "true" ]] && events=enabled
+  swaymsg -- input "$device" events "$events" >/dev/null
 }
 
 enable() {
