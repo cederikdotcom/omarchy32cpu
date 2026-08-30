@@ -120,10 +120,14 @@ and `install/hardware/apple/fix-a1181.sh`.
 1. DONE 2026-08-30: cloud test bench up (i686 chroot + IA32-UEFI QEMU
    VM); Lite core installed; sway/pixman validated on i686; fontconfig
    override built.
-2. Rehearse the full install in the QEMU VM from the archlinux32 ISO:
-   partition, pacstrap, GRUB i386-efi as BOOTIA32.EFI, boot from disk,
-   greetd into sway/pixman. This validates the whole boot chain against
-   32-bit UEFI firmware before touching the Mac.
+2. DONE 2026-08-30: full boot-chain rehearsal in the QEMU VM. Built the
+   disk per the runbook (GPT, ESP at /boot, pacstrap Lite core, GRUB
+   i386-efi as BOOTIA32.EFI, greetd initial_session into sway/pixman).
+   The 32-bit OVMF firmware booted BOOTIA32.EFI -> GRUB -> i686 kernel
+   -> greetd -> sway rendering on the display. The whole software stack
+   is proven; only the GMA 950 remains. Findings folded into the
+   install runbook (Architecture=i686 in pacman.conf, mirrorlist,
+   vconsole.conf before mkinitcpio, MODULES for the initramfs).
 3. Package lists: rewrite install/omarchy-base.packages to the Lite core;
    empty omarchy-other.packages of the Mac-irrelevant firmware sets.
 4. Boot chain in the repo: remove etc/limine-entry-tool.d/ and

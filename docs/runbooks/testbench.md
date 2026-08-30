@@ -42,7 +42,17 @@ development. Created 2026-08-30. Delete it when the port ships.
   `/opt/omarchy32/qemu-mon.sock`.
 - Purpose: rehearse the full install including GRUB i386-efi as
   `BOOTIA32.EFI` against real 32-bit UEFI firmware before touching the
-  Mac. (Worklist step 2; not yet run.)
+  Mac. DONE 2026-08-30: boots to sway on the display.
+- The rehearsed system lives in `/opt/omarchy32/disk.img` (raw, 20 G
+  sparse), built by `build-image.sh` + `configure-image.sh` in the same
+  directory (pacstrap Lite core, greetd initial_session into
+  sway/pixman, GRUB removable install; grub-install must run via
+  arch-chroot, not nspawn, so it can see the loop device). Login
+  ceder/omarchy or root/omarchy, serial console on ttyS0.
+- Boot it: the detached qemu-system-i386 command in the shell history
+  of this repo's rehearsal, or adapt launch-uefi32.sh to
+  `-drive ...file=disk.img,format=raw`. Screenshot: `echo screendump
+  /opt/omarchy32/shot.ppm | socat - unix-connect:/opt/omarchy32/qemu-mon.sock`.
 
 ## Costs and teardown
 

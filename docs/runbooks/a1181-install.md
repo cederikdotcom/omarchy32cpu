@@ -1,8 +1,22 @@
 # Runbook: install Omarchy 32-bit Lite on the MacBook1,1
 
-Status: boot chain and desktop validated in the cloud test bench (see
-testbench.md); the on-hardware GPU spike is still open. See
-docs/a1181-gap-analysis.md for the full plan.
+Status: REHEARSED END TO END 2026-08-30 in the test-bench VM (32-bit
+UEFI firmware -> BOOTIA32.EFI -> GRUB -> i686 kernel -> greetd -> sway
+with the pixman renderer on screen). Only the on-hardware GPU spike is
+open. See docs/a1181-gap-analysis.md for the plan and testbench.md for
+the VM.
+
+Rehearsal lessons now baked into the steps below:
+- Set `Architecture = i686` in /etc/pacman.conf of the installed system
+  (the default `auto` misdetects in chroots) and write a real
+  mirrorlist; pacstrap -M does not copy one.
+- Write /etc/vconsole.conf (e.g. `KEYMAP=us`) before mkinitcpio runs or
+  the image build errors out.
+- greetd: an `[initial_session]` with `command = "env
+  WLR_RENDERER=pixman dbus-run-session sway"` boots straight into sway,
+  matching upstream Omarchy's autologin UX.
+- grub-install for i386-efi with `--removable --no-nvram` needs no
+  efibootmgr and no NVRAM access; it just places BOOTIA32.EFI.
 
 ## Scope
 
