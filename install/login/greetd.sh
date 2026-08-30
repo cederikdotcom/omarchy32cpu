@@ -9,7 +9,7 @@ cat >/etc/greetd/config.toml <<EOF
 vt = 1
 
 [default_session]
-command = "tuigreet --cmd sway"
+command = "tuigreet --cmd /usr/share/omarchy/bin/omarchy-sway-launch"
 user = "greeter"
 EOF
 
@@ -17,7 +17,7 @@ if [[ -n ${OMARCHY_INSTALL_USER:-} ]]; then
   cat >>/etc/greetd/config.toml <<EOF
 
 [initial_session]
-command = "env WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES= dbus-run-session sway"
+command = "/usr/share/omarchy/bin/omarchy-sway-launch"
 user = "$OMARCHY_INSTALL_USER"
 EOF
 fi

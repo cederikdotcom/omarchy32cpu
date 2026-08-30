@@ -109,18 +109,24 @@ OMARCHY_SNAPPER_CONFIG_PATH="$test_tmp/missing" \
 pass "leak migration is a no-op without Snapper configured"
 
 # Snapper's create-config writes a root-only config, and a config this user
-# cannot read says nothing about whether timeline snapshots are wanted.
-: >"$test_tmp/calls.log"
-printf '%s\n' 'TIMELINE_CREATE="no"' >"$snapper_config"
-chmod 000 "$snapper_config"
+# cannot read says nothing about whether timeline snapshots are wanted. Root
+# reads through a mode-000 file, so the fixture only means something when the
+# test does not run as root.
+if (( EUID != 0 )); then
+  : >"$test_tmp/calls.log"
+  printf '%s\n' 'TIMELINE_CREATE="no"' >"$snapper_config"
+  chmod 000 "$snapper_config"
 
-TEST_LOG="$test_tmp/calls.log" \
-PATH="$fake_bin:$PATH" \
-OMARCHY_SNAPPER_CONFIG_PATH="$snapper_config" \
-  bash -euo pipefail "$leak_migration" >/dev/null 2>&1
+  TEST_LOG="$test_tmp/calls.log" \
+  PATH="$fake_bin:$PATH" \
+  OMARCHY_SNAPPER_CONFIG_PATH="$snapper_config" \
+    bash -euo pipefail "$leak_migration" >/dev/null 2>&1
 
-chmod 600 "$snapper_config"
+  chmod 600 "$snapper_config"
 
-grep -qF "sudo grep -qFx TIMELINE_CREATE=\"no\" $snapper_config" "$test_tmp/calls.log" ||
-  fail "leak migration reads a root-only Snapper config as root" "$(cat "$test_tmp/calls.log")"
-pass "leak migration does not mistake an unreadable Snapper config for an intentional one"
+  grep -qF "sudo grep -qFx TIMELINE_CREATE=\"no\" $snapper_config" "$test_tmp/calls.log" ||
+    fail "leak migration reads a root-only Snapper config as root" "$(cat "$test_tmp/calls.log")"
+  pass "leak migration does not mistake an unreadable Snapper config for an intentional one"
+else
+  pass "running as root; skipping the unreadable Snapper config fixture"
+fi

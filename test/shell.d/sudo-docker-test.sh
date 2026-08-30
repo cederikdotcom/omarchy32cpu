@@ -37,8 +37,12 @@ run() { # SOCKET GROUPS [--configured]
     bash "$command" ${3:+"$3"}
 }
 
-# Default mode follows the socket, not the group list.
-run "$blocked_socket" "wheel input" || fail "an unreachable socket means Docker needs sudo"
+# Default mode follows the socket, not the group list. Root writes through any
+# file mode, so the blocked-socket half of the probe only means something when
+# the test does not run as root.
+if (( EUID != 0 )); then
+  run "$blocked_socket" "wheel input" || fail "an unreachable socket means Docker needs sudo"
+fi
 run "$reachable_socket" "wheel input" && fail "a reachable socket means Docker does not need sudo"
 pass "default mode answers from the socket this session can reach"
 
@@ -55,7 +59,9 @@ pass "--configured answers from the account's groups"
 # account carries the group while the running session still cannot use it. The
 # menu must offer Remove (--configured says no sudo) while lazydocker and the
 # Windows VM must still prompt (default says sudo).
-run "$blocked_socket" "wheel input docker" || fail "the session still needs sudo before the reboot"
+if (( EUID != 0 )); then
+  run "$blocked_socket" "wheel input docker" || fail "the session still needs sudo before the reboot"
+fi
 run "$blocked_socket" "wheel input docker" --configured && fail "the account is already configured for sudoless Docker"
 pass "the two modes disagree between enabling sudoless Docker and the reboot"
 

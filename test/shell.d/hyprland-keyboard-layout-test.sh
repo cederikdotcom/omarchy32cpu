@@ -2,41 +2,34 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/base-test.sh"
 
-require_command lua
+# The Hyprland-era default/hypr/input.lua keyboard logic now lives in
+# bin/omarchy-sway-launch, which exports XKB_DEFAULT_* before exec'ing sway.
+# Stub sway to capture what the session hands the compositor.
+
+test_tmp=$(mktemp -d)
+trap 'rm -rf "$test_tmp"' EXIT
+
+stub_bin="$test_tmp/bin"
+mkdir -p "$stub_bin"
+
+cat >"$stub_bin/sway" <<'SH'
+#!/bin/bash
+printf '[%s] [%s] [%s]\n' "$XKB_DEFAULT_LAYOUT" "$XKB_DEFAULT_VARIANT" "$XKB_DEFAULT_OPTIONS"
+SH
+chmod +x "$stub_bin/sway"
 
 resolved_input() {
-  OMARCHY_PATH="$ROOT" OMARCHY_VCONSOLE="${1-}" lua <<'LUA'
-package.path = os.getenv("OMARCHY_PATH") .. "/?.lua;" .. package.path
+  local vconsole="${1-__missing__}"
+  local conf="$test_tmp/vconsole.conf"
 
-local vconsole = os.getenv("OMARCHY_VCONSOLE")
-local real_open = io.open
+  if [[ $vconsole == "__missing__" ]]; then
+    rm -f "$conf"
+  else
+    printf '%s' "$vconsole" >"$conf"
+  fi
 
-io.open = function(path, mode)
-  if path ~= "/etc/vconsole.conf" then
-    return real_open(path, mode)
-  end
-
-  if not vconsole then
-    return nil
-  end
-
-  local file = io.tmpfile()
-  file:write(vconsole)
-  file:seek("set")
-  return file
-end
-
-hl = {
-  config = function(config)
-    local input = config.input
-    print(("[%s] [%s] [%s]"):format(input.kb_layout, input.kb_variant, input.kb_options))
-  end,
-}
-
-o = { window = function() end }
-
-require("default.hypr.input")
-LUA
+  PATH="$stub_bin:$PATH" OMARCHY_VCONSOLE_CONF="$conf" HOME="$test_tmp" \
+    bash "$ROOT/bin/omarchy-sway-launch"
 }
 
 assert_input() {
@@ -72,14 +65,3 @@ XKBVARIANT=phonetic
 '
 assert_input "non-latin layout in front gains us even when us trails" "[us,il,us] [,] [$toggle_options]" 'XKBLAYOUT=il,us
 '
-
-hooks_conf="$ROOT/etc/mkinitcpio.conf.d/omarchy_hooks.conf"
-input_lua="$ROOT/default/hypr/input.lua"
-
-hooks_layouts=$(awk -F')' '/\) ;;$/ { gsub(/[[:space:]|]+/, "\n", $1); print $1 }' "$hooks_conf" | grep '^[a-z]\+$' | sort)
-lua_layouts=$(sed -n '/^local non_latin_layouts =/,+1p' "$input_lua" | grep -o '"[^"]*"' | tr -d '"' | tr ' ' '\n' | grep '^[a-z]\+$' | sort)
-
-[[ -n $hooks_layouts ]] || fail "non-latin layout list is readable from omarchy_hooks.conf"
-[[ $hooks_layouts == "$lua_layouts" ]] ||
-  fail "non-latin layout lists stay in sync" "$(diff <(echo "$hooks_layouts") <(echo "$lua_layouts"))"
-pass "non-latin layout lists stay in sync with the initramfs hook"

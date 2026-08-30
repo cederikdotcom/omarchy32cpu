@@ -126,14 +126,14 @@ children_of() {
     to_entries[]
     | select(parent(.key) == $route)
     | [.key, (.value.icon // ""), (.value.label // .key), kind(.value), payload(.value), (.value.when // ""), (.value.checked // "")]
-    | @tsv' <<<"$MENU"
+    | join("\u001f")' <<<"$MENU"
 }
 
 first_word_present() {
   local action="$1" word
   if [[ $action =~ ^([A-Za-z0-9_./-]+)([[:space:]]|$) ]]; then
     word="${BASH_REMATCH[1]}"
-    command -v "$word" >/dev/null 2>&1 && return 0
+    omarchy-cmd-present "$word" && return 0
     return 1
   fi
   # Complex actions (assignments, subshells) are not vetted by command name.
@@ -164,7 +164,9 @@ open_menu() {
   local route="$1"
   local ids=() kinds=() payloads=() rows=() id icon label kind payload when checked
 
-  while IFS=$'\t' read -r id icon label kind payload when checked; do
+  # Unit-separated, not @tsv: tab is IFS whitespace, so empty fields (an
+  # icon-less row) would collapse and shift every field after them.
+  while IFS=$'\x1f' read -r id icon label kind payload when checked; do
     [[ -n $id ]] || continue
     [[ $id =~ $PRUNE_IDS ]] && continue
     if [[ $kind == "action" && $payload =~ $PRUNE_ACTIONS ]]; then continue; fi

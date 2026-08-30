@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# omarchy:summary=Launch an app detached from the caller (uwsm-less stand-in)
+# omarchy:hidden=true
+
+# Omarchy CPU runs sway without uwsm. Callers throughout bin/ still launch
+# apps via uwsm-app; keep the name and detach semantics without the session
+# manager.
+
+[[ ${1:-} == "--" ]] && shift
+exec setsid -f "$@"

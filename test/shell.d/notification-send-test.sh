@@ -57,7 +57,9 @@ load
 [[ ${args[6]} == "Notify" ]] || fail "notification wrapper invokes Notify"
 [[ ${args[8]} == "custom-app" ]] || fail "notification wrapper sets the app name" "${args[8]}"
 [[ ${args[10]} == "battery-caution" ]] || fail "notification wrapper sets the app icon from -i" "${args[10]}"
-[[ ${args[11]} == "Download complete" ]] || fail "notification wrapper sets the summary" "${args[11]}"
+# mako has no renderer for the omarchy-glyph hint, so the wrapper folds the
+# glyph into the summary; the hint still rides along for richer renderers.
+[[ ${args[11]} == "K  Download complete" ]] || fail "notification wrapper sets the summary with the glyph folded in" "${args[11]}"
 [[ ${args[12]} == "A body" ]] || fail "notification wrapper sets the body" "${args[12]}"
 [[ ${args[-1]} == "5000" ]] || fail "notification wrapper sets the expire timeout from -t" "${args[-1]}"
 [[ $(hint_value urgency) == "2" ]] || fail "notification wrapper maps critical urgency to 2"
@@ -84,7 +86,7 @@ pass "notification wrapper supports -p (print id) and -r (replace id)"
 : >"$args_file"
 send "Received photo.png" "Saved to ~/Downloads" -u critical -g K >/dev/null
 load
-[[ ${args[11]} == "Received photo.png" ]] || fail "notification wrapper keeps the summary before trailing options" "${args[11]}"
+[[ ${args[11]} == "K  Received photo.png" ]] || fail "notification wrapper keeps the summary (glyph folded in) before trailing options" "${args[11]}"
 [[ ${args[12]} == "Saved to ~/Downloads" ]] || fail "notification wrapper keeps the body before trailing options" "${args[12]}"
 [[ $(hint_value urgency) == "2" ]] || fail "notification wrapper reads an urgency that follows the description" "$(hint_value urgency)"
 [[ $(hint_value omarchy-glyph) == "K" ]] || fail "notification wrapper reads a glyph that follows the description"

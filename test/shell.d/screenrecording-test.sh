@@ -167,135 +167,125 @@ grep -F 'WEBCAM_DEVICE=$(omarchy-capture-webcam-list' "$ROOT/bin/omarchy-capture
   fail "screenrecording auto-detection uses capture-capable webcams"
 pass "screenrecording auto-detection uses the first capture-capable webcam"
 
-cat >"$stub_bin/hyprctl" <<'SH'
+
+# The overlay is resized over sway IPC: the window comes from the tree by its
+# fixed WebcamOverlay title, the monitor from the output rect containing the
+# window center. Rects are logical, so the ladder math needs no scale factor.
+cat >"$stub_bin/swaymsg" <<'SH'
 #!/bin/bash
 
-case $1 in
-clients)
-  printf '[{"address":"0xabc","title":"%s","size":[%s,%s],"monitor":2}]\n' \
+if [[ ${1:-} == "-t" && ${2:-} == "get_tree" ]]; then
+  printf '{"type":"root","nodes":[{"type":"floating_con","pid":9,"id":33,"name":"%s","rect":{"x":%s,"y":%s,"width":%s,"height":%s}}]}\n' \
     "${OMARCHY_TEST_CLIENT_TITLE:-WebcamOverlay}" \
+    "${OMARCHY_TEST_CLIENT_X:-2342}" \
+    "${OMARCHY_TEST_CLIENT_Y:-460}" \
     "${OMARCHY_TEST_CLIENT_WIDTH:-178}" \
     "${OMARCHY_TEST_CLIENT_HEIGHT:-200}"
-  ;;
-monitors)
-  printf '[{"id":2,"x":1280,"y":-100,"width":%s,"height":%s,"scale":%s}]\n' \
-    "${OMARCHY_TEST_MONITOR_WIDTH:-2560}" \
-    "${OMARCHY_TEST_MONITOR_HEIGHT:-1600}" \
-    "${OMARCHY_TEST_MONITOR_SCALE:-2}"
-  ;;
-dispatch)
-  printf '%s\n' "$*" >>"$OMARCHY_TEST_HYPRCTL_ARGS"
-  ;;
-esac
+elif [[ ${1:-} == "-t" && ${2:-} == "get_outputs" ]]; then
+  printf '[{"name":"DP-2","active":true,"focused":true,"rect":{"x":1280,"y":-100,"width":%s,"height":%s}}]\n' \
+    "${OMARCHY_TEST_MONITOR_WIDTH:-1280}" \
+    "${OMARCHY_TEST_MONITOR_HEIGHT:-800}"
+else
+  printf '%s\n' "$*" >>"$OMARCHY_TEST_SWAYMSG_ARGS"
+fi
 SH
-chmod +x "$stub_bin/hyprctl"
+chmod +x "$stub_bin/swaymsg"
 
-export OMARCHY_TEST_HYPRCTL_ARGS="$tmp_dir/hyprctl-args"
+export OMARCHY_TEST_SWAYMSG_ARGS="$tmp_dir/swaymsg-args"
 
 "$ROOT/bin/omarchy-capture-webcam-resize" smaller
 
-expected_hyprctl_args="$tmp_dir/expected-hyprctl-args"
+expected_swaymsg_args="$tmp_dir/expected-swaymsg-args"
 printf '%s\n' \
-  'dispatch hl.dsp.window.resize({ window = "address:0xabc", x = 128, y = 144 })' \
-  'dispatch hl.dsp.window.move({ window = "address:0xabc", x = 2392, y = 516 })' >"$expected_hyprctl_args"
+  '[con_id=33] resize set 128 px 144 px' \
+  '[con_id=33] move absolute position 2392 516' >"$expected_swaymsg_args"
 
-if ! cmp -s "$OMARCHY_TEST_HYPRCTL_ARGS" "$expected_hyprctl_args"; then
-  fail "webcam resize preserves its aspect ratio and corner anchor" "$(diff -u "$expected_hyprctl_args" "$OMARCHY_TEST_HYPRCTL_ARGS")"
+if ! cmp -s "$OMARCHY_TEST_SWAYMSG_ARGS" "$expected_swaymsg_args"; then
+  fail "webcam resize preserves its aspect ratio and corner anchor" "$(diff -u "$expected_swaymsg_args" "$OMARCHY_TEST_SWAYMSG_ARGS")"
 fi
 pass "webcam resize preserves its aspect ratio and corner anchor"
 
-: >"$OMARCHY_TEST_HYPRCTL_ARGS"
+: >"$OMARCHY_TEST_SWAYMSG_ARGS"
 OMARCHY_TEST_MONITOR_WIDTH=1920 \
   OMARCHY_TEST_MONITOR_HEIGHT=1080 \
-  OMARCHY_TEST_MONITOR_SCALE=1 \
   OMARCHY_TEST_CLIENT_WIDTH=128 \
   OMARCHY_TEST_CLIENT_HEIGHT=144 \
   "$ROOT/bin/omarchy-capture-webcam-resize" reset
 
 printf '%s\n' \
-  'dispatch hl.dsp.window.resize({ window = "address:0xabc", x = 240, y = 270 })' \
-  'dispatch hl.dsp.window.move({ window = "address:0xabc", x = 2920, y = 670 })' >"$expected_hyprctl_args"
+  '[con_id=33] resize set 240 px 270 px' \
+  '[con_id=33] move absolute position 2920 670' >"$expected_swaymsg_args"
 
-if ! cmp -s "$OMARCHY_TEST_HYPRCTL_ARGS" "$expected_hyprctl_args"; then
-  fail "webcam default size adapts to monitor resolution" "$(diff -u "$expected_hyprctl_args" "$OMARCHY_TEST_HYPRCTL_ARGS")"
+if ! cmp -s "$OMARCHY_TEST_SWAYMSG_ARGS" "$expected_swaymsg_args"; then
+  fail "webcam default size adapts to monitor resolution" "$(diff -u "$expected_swaymsg_args" "$OMARCHY_TEST_SWAYMSG_ARGS")"
 fi
 pass "webcam default size adapts to monitor resolution"
 
-: >"$OMARCHY_TEST_HYPRCTL_ARGS"
+: >"$OMARCHY_TEST_SWAYMSG_ARGS"
 OMARCHY_TEST_CLIENT_TITLE="Other Window" "$ROOT/bin/omarchy-capture-webcam-resize" larger
 
-if [[ -s $OMARCHY_TEST_HYPRCTL_ARGS ]]; then
-  fail "webcam resize ignores other windows" "$(cat "$OMARCHY_TEST_HYPRCTL_ARGS")"
+if [[ -s $OMARCHY_TEST_SWAYMSG_ARGS ]]; then
+  fail "webcam resize ignores other windows" "$(cat "$OMARCHY_TEST_SWAYMSG_ARGS")"
 fi
 pass "webcam resize ignores other windows"
 
 region_file="$XDG_RUNTIME_DIR/omarchy-screenrecord-region"
 
-: >"$OMARCHY_TEST_HYPRCTL_ARGS"
+: >"$OMARCHY_TEST_SWAYMSG_ARGS"
 echo "800x600+100+100" >"$region_file"
 "$ROOT/bin/omarchy-capture-webcam-resize" reset
 
 printf '%s\n' \
-  'dispatch hl.dsp.window.resize({ window = "address:0xabc", x = 133, y = 150 })' \
-  'dispatch hl.dsp.window.move({ window = "address:0xabc", x = 727, y = 510 })' >"$expected_hyprctl_args"
+  '[con_id=33] resize set 133 px 150 px' \
+  '[con_id=33] move absolute position 727 510' >"$expected_swaymsg_args"
 
-if ! cmp -s "$OMARCHY_TEST_HYPRCTL_ARGS" "$expected_hyprctl_args"; then
-  fail "webcam anchors to the recorded region" "$(diff -u "$expected_hyprctl_args" "$OMARCHY_TEST_HYPRCTL_ARGS")"
+if ! cmp -s "$OMARCHY_TEST_SWAYMSG_ARGS" "$expected_swaymsg_args"; then
+  fail "webcam anchors to the recorded region" "$(diff -u "$expected_swaymsg_args" "$OMARCHY_TEST_SWAYMSG_ARGS")"
 fi
 pass "webcam anchors to the recorded region"
 
 printf '%s\n' \
-  'dispatch hl.dsp.window.resize({ window = "address:0xabc", x = 178, y = 200 })' \
-  'dispatch hl.dsp.window.move({ window = "address:0xabc", x = 2342, y = 460 })' >"$expected_hyprctl_args"
+  '[con_id=33] resize set 178 px 200 px' \
+  '[con_id=33] move absolute position 2342 460' >"$expected_swaymsg_args"
 
 for region in "not-a-region" ""; do
-  : >"$OMARCHY_TEST_HYPRCTL_ARGS"
+  : >"$OMARCHY_TEST_SWAYMSG_ARGS"
   printf '%s' "$region" >"$region_file"
   "$ROOT/bin/omarchy-capture-webcam-resize" reset
 
-  if ! cmp -s "$OMARCHY_TEST_HYPRCTL_ARGS" "$expected_hyprctl_args"; then
-    fail "webcam falls back to the monitor for an unusable region" "$(diff -u "$expected_hyprctl_args" "$OMARCHY_TEST_HYPRCTL_ARGS")"
+  if ! cmp -s "$OMARCHY_TEST_SWAYMSG_ARGS" "$expected_swaymsg_args"; then
+    fail "webcam falls back to the monitor for an unusable region" "$(diff -u "$expected_swaymsg_args" "$OMARCHY_TEST_SWAYMSG_ARGS")"
   fi
 done
 pass "webcam falls back to the monitor for an unusable region"
 
 # A region too narrow for presets scaled from its height shrinks the whole
 # ladder, so the three sizes stay distinct and each one fits inside the margins
-: >"$OMARCHY_TEST_HYPRCTL_ARGS"
+: >"$OMARCHY_TEST_SWAYMSG_ARGS"
 echo "200x1200+0+0" >"$region_file"
 for size in small medium large; do
   "$ROOT/bin/omarchy-capture-webcam-resize" "$size"
 done
 
 printf '%s\n' \
-  'dispatch hl.dsp.window.resize({ window = "address:0xabc", x = 64, y = 72 })' \
-  'dispatch hl.dsp.window.move({ window = "address:0xabc", x = 96, y = 1088 })' \
-  'dispatch hl.dsp.window.resize({ window = "address:0xabc", x = 89, y = 100 })' \
-  'dispatch hl.dsp.window.move({ window = "address:0xabc", x = 71, y = 1060 })' \
-  'dispatch hl.dsp.window.resize({ window = "address:0xabc", x = 120, y = 135 })' \
-  'dispatch hl.dsp.window.move({ window = "address:0xabc", x = 40, y = 1025 })' >"$expected_hyprctl_args"
+  '[con_id=33] resize set 64 px 72 px' \
+  '[con_id=33] move absolute position 96 1088' \
+  '[con_id=33] resize set 89 px 100 px' \
+  '[con_id=33] move absolute position 71 1060' \
+  '[con_id=33] resize set 120 px 135 px' \
+  '[con_id=33] move absolute position 40 1025' >"$expected_swaymsg_args"
 
-if ! cmp -s "$OMARCHY_TEST_HYPRCTL_ARGS" "$expected_hyprctl_args"; then
-  fail "webcam sizes stay distinct and inside a narrow region" "$(diff -u "$expected_hyprctl_args" "$OMARCHY_TEST_HYPRCTL_ARGS")"
+if ! cmp -s "$OMARCHY_TEST_SWAYMSG_ARGS" "$expected_swaymsg_args"; then
+  fail "webcam sizes stay distinct and inside a narrow region" "$(diff -u "$expected_swaymsg_args" "$OMARCHY_TEST_SWAYMSG_ARGS")"
 fi
 pass "webcam sizes stay distinct and inside a narrow region"
 
 rm -f "$region_file"
 
-grep -F 'o.bind("SUPER + ALT + code:34", "Make webcam overlay smaller", "omarchy-capture-webcam-resize smaller")' \
-  "$ROOT/default/hypr/bindings/utilities.lua" >/dev/null || fail "webcam smaller hotkey is configured"
-grep -F 'o.bind("SUPER + ALT + code:35", "Make webcam overlay larger", "omarchy-capture-webcam-resize larger")' \
-  "$ROOT/default/hypr/bindings/utilities.lua" >/dev/null || fail "webcam larger hotkey is configured"
-pass "webcam resize hotkeys are configured"
-
+# The Hyprland webcam-overlay window rules and the SUPER+ALT bracket hotkeys
+# were dropped with the Lite scope; the recorder waits for the map and calls
+# omarchy-capture-webcam-resize itself, so the size-specific app id remains the
+# only contract to pin.
 grep -F -- '--wayland-app-id="WebcamOverlay-$WEBCAM_SIZE"' \
   "$ROOT/bin/omarchy-capture-screenrecording" >/dev/null || fail "webcam uses a dedicated size-specific app id"
-
-webcam_rules="$ROOT/default/hypr/apps/webcam-overlay.lua"
-grep -F 'move = { "(monitor_w-monitor_h*4/25-40)", "(monitor_h-monitor_h*9/50-40)" }' "$webcam_rules" >/dev/null || \
-  fail "small webcam starts at its final corner position"
-grep -F 'move = { "(monitor_w-monitor_h*2/9-40)", "(monitor_h-monitor_h/4-40)" }' "$webcam_rules" >/dev/null || \
-  fail "medium webcam starts at its final corner position"
-grep -F 'move = { "(monitor_w-monitor_h*3/10-40)", "(monitor_h-monitor_h*27/80-40)" }' "$webcam_rules" >/dev/null || \
-  fail "large webcam starts at its final corner position"
-pass "webcam size rules place the initial window in its final corner"
+pass "webcam uses a dedicated size-specific app id"

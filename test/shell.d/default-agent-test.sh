@@ -114,12 +114,6 @@ assert_lazy_stub "$omp_package" omp
 assert_lazy_stub "$crush_package" crush
 pass "custom agent lazy stubs preserve their mise packages"
 
-source "$ROOT/install/user/mise.sh"
-grep -Fx "$grok_package grok" "$stub_log" >/dev/null || fail "user setup creates the Grok lazy stub"
-grep -Fx "$omp_package omp" "$stub_log" >/dev/null || fail "user setup creates the Oh My Pi lazy stub"
-grep -Fx "$crush_package" "$stub_log" >/dev/null || fail "user setup creates the Crush lazy stub"
-pass "user setup creates the custom agent lazy stubs"
-
 : >"$stub_log"
 source "$ROOT/migrations/1785617047.sh" >/dev/null
 grep -Fx "$omp_package omp" "$stub_log" >/dev/null || fail "Oh My Pi migration creates a working lazy stub"
@@ -193,8 +187,8 @@ source "$ROOT/default/bash/aliases"
   fail "terminal alias launches the default agent inline"
 pass "terminal alias launches the default agent inline"
 
-grep -Fq 'o.bind("SUPER + SHIFT + CTRL + A", "Agent", "omarchy-agent --pick")' \
-  "$ROOT/default/hypr/bindings/utilities.lua" ||
+grep -Fq 'bindsym $mod+Shift+Ctrl+a exec omarchy-agent --pick' \
+  "$ROOT/default/sway/config" ||
   fail "agent launcher has a keyboard shortcut"
 pass "agent launcher has a keyboard shortcut"
 

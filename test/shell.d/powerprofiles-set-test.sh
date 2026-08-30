@@ -73,10 +73,10 @@ pass "power profile retains performance as AC default"
 [[ $(tail -n 1 "$tmp_dir/calls") == "power-saver" ]] || fail "init restores the autodetected preference"
 pass "power profile init restores the autodetected preference"
 
-rg -F '["omarchy-powerprofiles-set", pendingPowerSource]' "$ROOT/shell/plugins/services/battery/Service.qml" >/dev/null ||
-  fail "battery service applies profiles through Omarchy command"
-pass "battery service applies profiles through Omarchy command"
-
-rg -F 'omarchy-powerprofiles-set autodetect' "$ROOT/shell/plugins/menu/Menu.qml" >/dev/null ||
-  fail "power profile menu persists selections through Omarchy command"
-pass "power profile menu persists selections through Omarchy command"
+# The Quickshell battery service is gone; the sway session restores the saved
+# profile at login through the init wrapper, which autodetects the power source.
+grep -Fq 'exec omarchy-powerprofiles-init' "$ROOT/default/sway/config" ||
+  fail "sway session restores the saved power profile at login"
+grep -Fq 'omarchy-powerprofiles-set autodetect' "$ROOT/bin/omarchy-powerprofiles-init" ||
+  fail "power profile init autodetects the power source through Omarchy command"
+pass "sway session applies profiles through Omarchy command"

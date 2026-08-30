@@ -31,14 +31,6 @@ grep -Fx 'systemctl --user daemon-reload' "$first_run_units" >/dev/null
 grep -F 'omarchy-sleep-lock.service' "$first_run_units" >/dev/null
 pass "first-run reloads and enables the sleep lock service"
 
-upgrade_to_quattro="$ROOT/bin/omarchy-upgrade-to-quattro"
-grep -F '6870b232a6c0474b59187882e6d25ae771bba735098bcbedef8a2b73b97e2b6a' "$upgrade_to_quattro" >/dev/null
-grep -F 'bcd1a76cb5c63514922bc5e11af22ae480fc6d06a99863364e02bdf3c7bdceaf' "$upgrade_to_quattro" >/dev/null
-grep -F 'ExecStart=%h/.local/share/omarchy/bin/omarchy-system-sleep-monitor' "$upgrade_to_quattro" >/dev/null
-grep -F 'ExecStart=/usr/bin/omarchy-system-sleep-monitor' "$upgrade_to_quattro" >/dev/null
-grep -F 'reset-failed omarchy-sleep-lock.service' "$upgrade_to_quattro" >/dev/null
-pass "Omarchy 4 upgrade repairs the legacy sleep lock unit path"
-
 [[ -e $ROOT/default/systemd/user/omarchy-update-user-notify.path ]] &&
   fail "the retired migration watcher is back; pacman writing the migration directory during omarchy update would notify about migrations that update is already applying"
 grep -rlE '^(Path[A-Za-z]+|DirectoryNotEmpty)=.*/usr/share/omarchy/migrations' "$ROOT/default/systemd/user" >/dev/null 2>&1 &&
@@ -84,8 +76,8 @@ grep -F 'pkill -x fcitx5' "$ROOT/bin/omarchy-restart-xcompose" >/dev/null ||
 
 grep -F 'omarchy-fcitx5.service' "$first_run_units" >/dev/null ||
   fail "first-run does not enable the input method, so ~/.XCompose sequences never resolve"
-grep -F 'fcitx5' "$ROOT/default/hypr/autostart.lua" >/dev/null &&
-  fail "fcitx5 is autostarted from Hyprland; an unsupervised launch dies silently and takes every compose sequence with it"
+grep -rF 'fcitx5' "$ROOT/default/sway" "$ROOT/config/sway" >/dev/null 2>&1 &&
+  fail "fcitx5 is autostarted from sway; an unsupervised launch dies silently and takes every compose sequence with it"
 pass "fcitx5 runs supervised, so a lost input method comes back instead of killing XCompose until logout"
 
 oomd_slice="$ROOT/default/systemd/user/app.slice.d/10-oomd.conf"

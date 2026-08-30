@@ -4,42 +4,36 @@ set -euo pipefail
 
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
-run_node_test <<'JS'
-const nightlight = requireFromRoot('shell/plugins/services/nightlight/NightlightModel.js')
+require_command jq
 
-assertEqual(nightlight.temperatureFromOutput('4000\n'), 4000, 'nightlight parses probe temperature')
-assertEqual(nightlight.temperatureFromOutput("Couldn't connect to hyprsunset"), null, 'nightlight treats unreachable hyprsunset as unknown')
-assertEqual(nightlight.isNightlight(4000), true, 'nightlight reports warm temperatures as enabled')
-assertEqual(nightlight.isNightlight(5999), true, 'nightlight reports warmer-than-identity values as enabled')
-assertEqual(nightlight.isNightlight(6000), false, 'nightlight reports identity temperature as disabled')
-assertEqual(nightlight.isNightlight(null), false, 'nightlight reports unknown temperature as disabled')
-JS
+# Omarchy CPU drives the nightlight with wlsunset instead of hyprsunset.
+# wlsunset has no IPC to query, so the toggle keeps a state file and a live
+# process as the enabled state.
 
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
-mkdir -p "$TMPDIR/bin"
-STATE="$TMPDIR/hyprsunset-temp"
+mkdir -p "$TMPDIR/bin" "$TMPDIR/home"
+RUNNING="$TMPDIR/wlsunset-running"
+LAUNCH_LOG="$TMPDIR/launch-log"
 SHELL_LOG="$TMPDIR/omarchy-shell-log"
-
-cat >"$TMPDIR/bin/hyprctl" <<'SH'
-#!/bin/bash
-
-if [[ ${1:-} == "hyprsunset" && ${2:-} == "temperature" ]]; then
-  if [[ -n ${3:-} ]]; then
-    printf '%s\n' "$3" >"$HYPRSUNSET_STATE"
-  else
-    cat "$HYPRSUNSET_STATE" 2>/dev/null || exit 1
-  fi
-  exit 0
-fi
-
-exit 1
-SH
+state_file="$TMPDIR/home/.local/state/omarchy/toggles/nightlight"
 
 cat >"$TMPDIR/bin/pgrep" <<'SH'
 #!/bin/bash
-exit 0
+[[ -e $WLSUNSET_RUNNING ]]
+SH
+
+cat >"$TMPDIR/bin/pkill" <<'SH'
+#!/bin/bash
+[[ -e $WLSUNSET_RUNNING ]] || exit 1
+rm -f "$WLSUNSET_RUNNING"
+SH
+
+cat >"$TMPDIR/bin/setsid" <<'SH'
+#!/bin/bash
+printf '%s\n' "$*" >>"$LAUNCH_LOG"
+touch "$WLSUNSET_RUNNING"
 SH
 
 cat >"$TMPDIR/bin/omarchy-shell" <<'SH'
@@ -47,46 +41,46 @@ cat >"$TMPDIR/bin/omarchy-shell" <<'SH'
 printf '%s\n' "$*" >>"$OMARCHY_SHELL_LOG"
 SH
 
-chmod +x "$TMPDIR/bin/hyprctl" "$TMPDIR/bin/pgrep" "$TMPDIR/bin/omarchy-shell"
+chmod +x "$TMPDIR/bin/pgrep" "$TMPDIR/bin/pkill" "$TMPDIR/bin/setsid" "$TMPDIR/bin/omarchy-shell"
 
 nightlight_cli() {
   PATH="$TMPDIR/bin:$PATH" \
-  HYPRSUNSET_STATE="$STATE" \
+  HOME="$TMPDIR/home" \
+  WLSUNSET_RUNNING="$RUNNING" \
+  LAUNCH_LOG="$LAUNCH_LOG" \
   OMARCHY_SHELL_LOG="$SHELL_LOG" \
     "$ROOT/bin/omarchy-toggle-nightlight" "$@"
 }
 
-nightlight_status() {
-  printf '%s\n' "$1" >"$STATE"
-  nightlight_cli --status
-}
+[[ $(nightlight_cli --status | jq -r .enabled) == "false" ]] || fail "nightlight status starts disabled"
+pass "nightlight status starts disabled"
 
-[[ $(nightlight_status 4000 | jq -r .enabled) == "true" ]] || fail "nightlight status reports 4000K as enabled"
-pass "nightlight status reports 4000K as enabled"
-
-[[ $(nightlight_status 5999 | jq -r .enabled) == "true" ]] || fail "nightlight status reports warmer-than-identity values as enabled"
-pass "nightlight status reports warmer-than-identity values as enabled"
-
-[[ $(nightlight_status 6000 | jq -r .enabled) == "false" ]] || fail "nightlight status reports identity temperature as disabled"
-pass "nightlight status reports identity temperature as disabled"
-
-[[ $(nightlight_status 6500 | jq -r .enabled) == "false" ]] || fail "nightlight status reports daylight temperature as disabled"
-pass "nightlight status reports daylight temperature as disabled"
-
-printf '6500\n' >"$STATE"
 : >"$SHELL_LOG"
 nightlight_cli >/dev/null
-[[ $(<"$STATE") == 4000 ]] || fail "nightlight toggle warms the screen from daylight"
-pass "nightlight toggle warms the screen from daylight"
+grep -q 'wlsunset -t 4000' "$LAUNCH_LOG" || fail "nightlight toggle launches wlsunset at the night temperature" "$(cat "$LAUNCH_LOG")"
+pass "nightlight toggle launches wlsunset at the night temperature"
+
+[[ -f $state_file ]] || fail "nightlight toggle records the enabled state"
+pass "nightlight toggle records the enabled state"
 
 grep -Fqx -- '-q nightlight refresh' "$SHELL_LOG" || fail "nightlight toggle nudges the shell nightlight service"
 pass "nightlight toggle nudges the shell nightlight service"
 
+status=$(nightlight_cli --status)
+[[ $(jq -r .enabled <<<"$status") == "true" && $(jq -r .temperature <<<"$status") == "4000" ]] ||
+  fail "nightlight status reports the running wlsunset as enabled" "$status"
+pass "nightlight status reports the running wlsunset as enabled"
+
 nightlight_cli >/dev/null
-[[ $(<"$STATE") == 6500 ]] || fail "nightlight toggle restores daylight from night light"
+[[ ! -e $RUNNING ]] || fail "nightlight toggle kills wlsunset to restore daylight"
+[[ ! -f $state_file ]] || fail "nightlight toggle clears the enabled state"
 pass "nightlight toggle restores daylight from night light"
 
-if rg -q 'omarchy.indicators' "$ROOT/bin/omarchy-toggle-nightlight"; then
-  fail "nightlight toggle leaves indicator refresh to the nightlight service"
-fi
-pass "nightlight toggle leaves indicator refresh to the nightlight service"
+# A state file left behind by a crashed wlsunset must not read as enabled.
+mkdir -p "$(dirname "$state_file")"
+touch "$state_file"
+rm -f "$RUNNING"
+[[ $(nightlight_cli --status | jq -r .enabled) == "false" ]] ||
+  fail "nightlight status treats a stale state file without a process as disabled"
+rm -f "$state_file"
+pass "nightlight status treats a stale state file without a process as disabled"

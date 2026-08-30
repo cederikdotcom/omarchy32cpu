@@ -68,7 +68,8 @@ failures=0
 previous=""
 
 while true; do
-  current=$(swaymsg -t get_outputs 2>/dev/null | jq -c '[.[] | {name, active}]' 2>/dev/null)
+  outputs=$(swaymsg -t get_outputs 2>/dev/null)
+  current=$(jq -c '[.[] | {name, active}]' <<<"$outputs" 2>/dev/null)
 
   if [[ -z $current ]]; then
     (( ++failures > 15 )) && exit 0
@@ -79,8 +80,15 @@ while true; do
       previous=$current
       sync_clamshell_after_monitor_change
       recover_modeless
-    elif omarchy-hw-laptop && omarchy-hyprland-monitor-external-active; then
-      sync_clamshell
+    else
+      if omarchy-hw-laptop && omarchy-hyprland-monitor-external-active; then
+        sync_clamshell
+      fi
+
+      # A reload can land an output at 0x0 without changing the topology the
+      # poll keys on, so check the mode too; the lock keeps this to one loop.
+      modeless=$(jq 'any(.[]; .active == true and (((.current_mode.width // 0) == 0) or ((.current_mode.height // 0) == 0)))' <<<"$outputs" 2>/dev/null)
+      [[ $modeless == "true" ]] && recover_modeless
     fi
   fi
 

@@ -10,45 +10,45 @@ trap 'rm -rf "$test_tmp"' EXIT
 mock_bin="$test_tmp/bin"
 mkdir -p "$mock_bin"
 
-cat >"$mock_bin/hyprctl" <<'SH'
+cat >"$mock_bin/swaymsg" <<'SH'
 #!/bin/bash
-if [[ $1 == "clients" ]]; then
-  printf '%s\n' "$OMARCHY_TEST_CLIENTS_JSON"
-elif [[ $1 == "dispatch" ]]; then
-  printf '%s\n' "$2" >"$OMARCHY_TEST_FOCUS_DISPATCH"
+if [[ ${1:-} == "-t" && ${2:-} == "get_tree" ]]; then
+  printf '%s\n' "$OMARCHY_TEST_TREE_JSON"
+else
+  printf '%s\n' "$*" >>"$OMARCHY_TEST_FOCUS_DISPATCH"
 fi
 SH
-chmod +x "$mock_bin/hyprctl"
+chmod +x "$mock_bin/swaymsg"
 
 dispatch_log="$test_tmp/dispatch"
-clients_json='[{"address":"0xabc","class":"chromium"}]'
-PATH="$mock_bin:$PATH" OMARCHY_TEST_CLIENTS_JSON="$clients_json" \
+tree_json='{"type":"root","nodes":[{"type":"con","pid":100,"id":7,"app_id":"chromium","name":"Inbox"}]}'
+PATH="$mock_bin:$ROOT/bin:$PATH" OMARCHY_TEST_TREE_JSON="$tree_json" \
   OMARCHY_TEST_FOCUS_DISPATCH="$dispatch_log" \
   bash "$ROOT/bin/omarchy-hyprland-focus-app" '^chromium$'
 
-grep -F 'hl.dsp.focus({ window = "address:0xabc" })' "$dispatch_log" >/dev/null || \
-  fail "app focus uses the workspace-aware Hyprland dispatcher"
+grep -F '[con_id=7] focus' "$dispatch_log" >/dev/null || \
+  fail "app focus uses the sway con_id focus command"
 
 pass "app focus follows windows across workspaces"
 
-clients_json='[
-  {"address":"0xviber","class":"com.viber.Viber","initialClass":"com.viber.Viber","initialTitle":"Viber"},
-  {"address":"0xagent","class":"org.omarchy.agent","initialClass":"org.omarchy.agent","initialTitle":"kitty"}
-]'
-PATH="$mock_bin:$PATH" OMARCHY_TEST_CLIENTS_JSON="$clients_json" \
+tree_json='{"type":"root","nodes":[
+  {"type":"con","pid":101,"id":11,"app_id":"com.viber.Viber","name":"Viber"},
+  {"type":"con","pid":102,"id":12,"app_id":"org.omarchy.agent","name":"kitty"}
+]}'
+PATH="$mock_bin:$ROOT/bin:$PATH" OMARCHY_TEST_TREE_JSON="$tree_json" \
   OMARCHY_TEST_FOCUS_DISPATCH="$dispatch_log" \
   bash "$ROOT/bin/omarchy-hyprland-focus-app" kitty
 
-grep -F 'hl.dsp.focus({ window = "address:0xagent" })' "$dispatch_log" >/dev/null || \
-  fail "app focus falls back to the initial window title"
+grep -F '[con_id=12] focus' "$dispatch_log" >/dev/null || \
+  fail "app focus falls back to the agent window title"
 
 pass "app focus finds terminals launched under a shared agent class"
 
-clients_json='[
-  {"address":"0xbrowser","class":"chromium","initialClass":"chromium","initialTitle":"Mail settings"}
-]'
+tree_json='{"type":"root","nodes":[
+  {"type":"con","pid":103,"id":21,"app_id":"chromium","name":"Mail settings"}
+]}'
 rm -f "$dispatch_log"
-if PATH="$mock_bin:$PATH" OMARCHY_TEST_CLIENTS_JSON="$clients_json" \
+if PATH="$mock_bin:$ROOT/bin:$PATH" OMARCHY_TEST_TREE_JSON="$tree_json" \
   OMARCHY_TEST_FOCUS_DISPATCH="$dispatch_log" \
   bash "$ROOT/bin/omarchy-hyprland-focus-app" Mail; then
   fail "app focus rejects title matches from non-agent windows"

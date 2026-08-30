@@ -46,10 +46,18 @@ fullscreen-toggle)
   ;;
 focus-app)
   [[ -n ${2:-} ]] || usage
+  # Agent terminals notify as kitty/foot/etc. while their shared app id is
+  # org.omarchy.agent, leaving the terminal name only in the window title. So
+  # match by app id/class first, then fall back to titles of agent windows
+  # only; a stray title match on an unrelated window must not steal focus.
   con_id=$(
     windows | jq -r --arg pattern "$2" \
       'def matches($value): ($value // "") | test($pattern; "i");
-       first(.[] | select(matches(.app_id) or matches(.window_properties.class) or matches(.name))).id // empty'
+       def is_agent: (.app_id // .window_properties.class // "") == "org.omarchy.agent";
+       first(
+         (.[] | select(matches(.app_id) or matches(.window_properties.class))),
+         (.[] | select(is_agent and matches(.name)))
+       ).id // empty'
   )
 
   if [[ -n $con_id ]]; then

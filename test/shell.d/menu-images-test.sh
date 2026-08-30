@@ -4,138 +4,87 @@ set -euo pipefail
 
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
-require_command flock
+# Omarchy CPU's image selector is a fuzzel list of image names: no thumbnail
+# cache, no locks. The calling contract stays: the selection's full path is
+# printed (bare name with --print-name), cancel prints nothing and exits 0,
+# and the old thumbnail-cache flags are accepted as no-ops.
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-cache_home="$tmp/cache"
 images="$tmp/images"
+extra="$tmp/extra"
 stub_bin="$tmp/bin"
-mkdir -p "$images" "$stub_bin"
+mkdir -p "$images" "$extra" "$stub_bin"
 
-cat >"$stub_bin/vipsthumbnail" <<'EOF'
+# fuzzel --dmenu --index: record the offered rows, answer with a fixed index
+# (or cancel).
+cat >"$stub_bin/fuzzel" <<'EOF'
 #!/bin/bash
 
-image="$1"
-shift
-
-while (( $# > 0 )); do
-  if [[ $1 == "--path" ]]; then
-    output=${2%%\[*}
-    break
-  fi
-  shift
-done
-
-if [[ -f ${VIPSTHUMBNAIL_FAIL_FILE:-} ]] && grep -Fxq "$image" "$VIPSTHUMBNAIL_FAIL_FILE"; then
-  exit 1
-fi
-
-[[ -z ${VIPSTHUMBNAIL_CALLS_FILE:-} ]] || printf '%s\n' "$image" >>"$VIPSTHUMBNAIL_CALLS_FILE"
-[[ -z ${VIPSTHUMBNAIL_DELAY:-} ]] || sleep "$VIPSTHUMBNAIL_DELAY"
-printf 'thumbnail' >"$output"
+cat >"${FUZZEL_ROWS_FILE:-/dev/null}"
+[[ ${FUZZEL_CANCEL:-0} == "1" ]] && exit 2
+printf '%s\n' "${FUZZEL_INDEX:-0}"
 EOF
-chmod +x "$stub_bin/vipsthumbnail"
+chmod +x "$stub_bin/fuzzel"
 
-for name in one two three; do
+for name in alpha beta gamma; do
   printf 'image-%s' "$name" >"$images/$name.png"
 done
 
-cache_dir="$cache_home/omarchy/image-selector"
-mkdir -p "$cache_dir"
+run_menu() {
+  PATH="$stub_bin:$PATH" "$ROOT/bin/omarchy-menu-images" "$@"
+}
 
-stale_tmp=""
-live_lock=""
-for image in "$images"/*; do
-  signature=$(stat -Lc '%s:%Y' "$image")
-  hash=$(printf '%s\t%s' "$image" "$signature" | md5sum | cut -d ' ' -f 1)
-  mkdir "$cache_dir/$hash.jpg.lock"
-  touch -m -d '10 minutes ago' "$cache_dir/$hash.jpg.lock"
-  stale_tmp="$cache_dir/$hash.jpg.4242.jpg"
-  live_lock="$cache_dir/$hash.jpg.lock"
-done
-printf 'partial' >"$stale_tmp"
+# Thumbnail-cache flags are accepted no-ops: exit 0, no output, no cache dirs.
+cache_out=$(XDG_CACHE_HOME="$tmp/cache" run_menu --cache-only "$images") ||
+  fail "cache-only run exits cleanly"
+[[ -z $cache_out ]] || fail "cache-only run prints nothing" "$cache_out"
+[[ ! -e $tmp/cache/omarchy ]] || fail "cache-only run creates no cache"
+XDG_CACHE_HOME="$tmp/cache" run_menu --preload --lazy-thumbnails "$images" >/dev/null <<<"" ||
+  fail "legacy thumbnail flags are still accepted"
+pass "legacy thumbnail-cache flags are accepted as no-ops"
 
-cache_key=$(printf '%s' "$images" | md5sum | cut -d ' ' -f 1)
-printf '%s\t%s' "$images/one.png" "$cache_dir/missing.jpg" >"$cache_dir/$cache_key.rows"
-printf 'v2\n%s:%s\n' "$images" "$(stat -Lc '%Y' "$images")" >"$cache_dir/$cache_key.signature"
-printf 'v1\n%s:%s\n' "$images" "$(stat -Lc '%Y' "$images")" >"$cache_dir/$cache_key.fast-signature"
+# The selection maps back to the full path by row index.
+selection=$(FUZZEL_ROWS_FILE="$tmp/rows" FUZZEL_INDEX=1 run_menu "$images")
+[[ $selection == "$images/beta.png" ]] ||
+  fail "image menu prints the full path of the selected row" "$selection"
+printf '%s\n' alpha beta gamma | cmp -s - "$tmp/rows" ||
+  fail "image menu offers bare names without extensions" "$(cat "$tmp/rows")"
+pass "image menu maps the chosen row back to its image path"
 
-PATH="$stub_bin:$PATH" XDG_CACHE_HOME="$cache_home" \
-  "$ROOT/bin/omarchy-menu-images" --cache-only "$images"
+# --print-name answers with the bare name instead of the path.
+selection=$(FUZZEL_INDEX=2 run_menu --print-name "$images")
+[[ $selection == "gamma" ]] ||
+  fail "image menu prints the bare name with --print-name" "$selection"
+pass "image menu prints the bare name with --print-name"
 
-(( $(find "$cache_dir" -maxdepth 1 -name '*.jpg' -type f | wc -l) == 3 )) ||
-  fail "image menu recovers thumbnails from stranded locks"
-(( $(awk 'END { print NR }' "$cache_dir/$cache_key.rows") == 3 )) ||
-  fail "image menu rebuilds every row after cache invalidation"
-[[ $(head -n 1 "$cache_dir/$cache_key.signature") == "v3" ]] ||
-  fail "image menu invalidates stale row caches"
-[[ ! -e $stale_tmp ]] ||
-  fail "image menu clears partial thumbnails left by killed generators"
-pass "image menu recovers stranded locks and stale rows"
+# The current selection is offered first, so plain Enter keeps it.
+selection=$(FUZZEL_ROWS_FILE="$tmp/rows" FUZZEL_INDEX=0 run_menu --selected "$images/beta.png" "$images")
+[[ $selection == "$images/beta.png" ]] ||
+  fail "image menu keeps the current selection on Enter" "$selection"
+[[ $(head -n 1 "$tmp/rows") == "beta" ]] ||
+  fail "image menu lists the current selection first" "$(cat "$tmp/rows")"
+pass "image menu lists the current selection first"
 
-rm -rf "$cache_home"
-mkdir -p "$cache_dir"
-mkdir "$live_lock"
+# Cancel prints nothing and exits 0, so callers see "no change".
+selection=$(FUZZEL_CANCEL=1 run_menu "$images") ||
+  fail "a cancelled image menu exits cleanly"
+[[ -z $selection ]] || fail "a cancelled image menu prints nothing" "$selection"
+pass "a cancelled image menu prints nothing and exits cleanly"
 
-PATH="$stub_bin:$PATH" XDG_CACHE_HOME="$cache_home" \
-  "$ROOT/bin/omarchy-menu-images" --cache-only "$images"
+# Duplicate names across directories stay unambiguous through index mapping
+# (paths sort globally, so $extra/alpha.png lands ahead of $images/alpha.png).
+printf 'other-alpha' >"$extra/alpha.png"
+selection=$(FUZZEL_ROWS_FILE="$tmp/rows" FUZZEL_INDEX=0 run_menu "$images" "$extra")
+[[ $selection == "$extra/alpha.png" ]] ||
+  fail "duplicate names across directories resolve by index" "$selection"
+[[ $(grep -cx alpha "$tmp/rows") == 2 ]] ||
+  fail "both same-named images are offered" "$(cat "$tmp/rows")"
+pass "duplicate image names across directories stay unambiguous"
 
-(( $(find "$cache_dir" -maxdepth 1 -name '*.jpg' -type f | wc -l) == 2 )) ||
-  fail "image menu skips a thumbnail whose fresh legacy lock may still be owned"
-[[ -d $live_lock ]] ||
-  fail "image menu leaves a fresh legacy lock directory alone"
-[[ ! -e $cache_dir/$cache_key.rows ]] ||
-  fail "image menu does not cache rows while a legacy generator holds a lock"
-pass "image menu respects a live legacy generator's lock"
-
-rm -rf "$cache_home"
-mkdir -p "$cache_home"
-printf '%s\n' "$images/two.png" >"$tmp/failures"
-
-PATH="$stub_bin:$PATH" XDG_CACHE_HOME="$cache_home" VIPSTHUMBNAIL_FAIL_FILE="$tmp/failures" \
-  "$ROOT/bin/omarchy-menu-images" --cache-only "$images"
-
-cache_dir="$cache_home/omarchy/image-selector"
-[[ ! -e $cache_dir/$cache_key.rows ]] || fail "image menu does not cache incomplete rows"
-[[ ! -e $cache_dir/$cache_key.signature ]] || fail "image menu does not sign incomplete rows"
-[[ ! -e $cache_dir/$cache_key.fast-signature ]] || fail "image menu does not fast-cache incomplete rows"
-pass "image menu leaves failed thumbnail batches uncached"
-
-rm "$tmp/failures"
-PATH="$stub_bin:$PATH" XDG_CACHE_HOME="$cache_home" \
-  "$ROOT/bin/omarchy-menu-images" --cache-only "$images"
-
-(( $(find "$cache_dir" -maxdepth 1 -name '*.jpg' -type f | wc -l) == 3 )) ||
-  fail "image menu retries a previously failed thumbnail"
-(( $(awk 'END { print NR }' "$cache_dir/$cache_key.rows") == 3 )) ||
-  fail "image menu caches every row after retry"
-pass "image menu completes and caches a later retry"
-
-rm -rf "$cache_home"
-mkdir -p "$cache_home"
-: >"$tmp/calls"
-
-# The delay keeps both runs inside the generation window so the locks are
-# actually contended rather than the second run arriving after the first.
-pids=()
-for run in 1 2; do
-  PATH="$stub_bin:$PATH" XDG_CACHE_HOME="$cache_home" \
-    VIPSTHUMBNAIL_CALLS_FILE="$tmp/calls" VIPSTHUMBNAIL_DELAY=0.25 \
-    "$ROOT/bin/omarchy-menu-images" --cache-only "$images" &
-  pids+=($!)
-done
-for pid in "${pids[@]}"; do
-  wait "$pid" || fail "concurrent image menu runs exit cleanly"
-done
-
-(( $(wc -l <"$tmp/calls") == 3 )) || fail "image menu serializes concurrent thumbnail generators"
-
-rm -f "$cache_dir"/*.jpg
-rm -f "$cache_dir/$cache_key.rows" "$cache_dir/$cache_key.signature" "$cache_dir/$cache_key.fast-signature"
-PATH="$stub_bin:$PATH" XDG_CACHE_HOME="$cache_home" VIPSTHUMBNAIL_CALLS_FILE="$tmp/calls" \
-  "$ROOT/bin/omarchy-menu-images" --cache-only "$images"
-
-(( $(wc -l <"$tmp/calls") == 6 )) || fail "image menu releases thumbnail locks after generation"
-pass "image menu owns locks for exactly one generator lifetime"
+# No image directory is a usage error; an empty one reports no images.
+run_menu >/dev/null 2>&1 && fail "image menu requires an image directory"
+mkdir -p "$tmp/empty"
+run_menu "$tmp/empty" >/dev/null 2>&1 && fail "an imageless directory is an error"
+pass "image menu rejects empty input"

@@ -12,9 +12,12 @@ Rehearsal lessons now baked into the steps below:
   mirrorlist; pacstrap -M does not copy one.
 - Write /etc/vconsole.conf (e.g. `KEYMAP=us`) before mkinitcpio runs or
   the image build errors out.
-- greetd: an `[initial_session]` with `command = "env
-  WLR_RENDERER=pixman dbus-run-session sway"` boots straight into sway,
-  matching upstream Omarchy's autologin UX.
+- greetd: both sessions launch
+  `/usr/share/omarchy/bin/omarchy-sway-launch` (the `[initial_session]`
+  boots straight into sway, matching upstream's autologin UX). The
+  wrapper sets the pixman renderer, OMARCHY_PATH, and the systemd user
+  bus; never wrap the session in dbus-run-session (its private bus
+  splits notifications and user units apart).
 - grub-install for i386-efi with `--removable --no-nvram` needs no
   efibootmgr and no NVRAM access; it just places BOOTIA32.EFI.
 

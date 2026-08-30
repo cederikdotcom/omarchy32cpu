@@ -500,20 +500,29 @@ pass "migration raises its unrepairable states as a desktop notification"
 # user-owned authfile still inside. Absence and "cannot look" are the same
 # answer to an unprivileged test, so keying the early exit on the authfile
 # recorded a repair on exactly the machines that still needed one.
-rm -rf "$authfile"
-write_authfile 644 || fail "the test can stage the untraversable-directory fixture"
-before_inode=$(stat -c %i "$authfile")
-chmod 000 "$authdir"
-run_migration 0 0 caller caller 644
-[[ $(stat -c %a "$authdir") == "755" ]] ||
-  fail "the migration reopens the directory the old umask closed" "got: $(stat -c %a "$authdir")"
-grep -Fxq $'sudo\tchmod\t755\t'"$authdir" "$calls" ||
-  fail "the migration asks root to reopen the FIDO2 directory" "$(cat "$calls")"
-grep -Fq $'sudo\tinstall\t-T\t' "$calls" ||
-  fail "an authfile hidden behind an untraversable directory is still repaired" "$(cat "$calls")"
-[[ $(stat -c %i "$authfile") != "$before_inode" ]] ||
-  fail "the repair behind an untraversable directory still replaces the inode"
-pass "migration repairs an authfile an unreadable directory hid from it"
+# Root traverses a mode-000 directory anyway, so the closed-directory fixture
+# only stages the untraversable state when the test does not run as root.
+if (( EUID != 0 )); then
+  rm -rf "$authfile"
+  write_authfile 644 || fail "the test can stage the untraversable-directory fixture"
+  before_inode=$(stat -c %i "$authfile")
+  chmod 000 "$authdir"
+  run_migration 0 0 caller caller 644
+  [[ $(stat -c %a "$authdir") == "755" ]] ||
+    fail "the migration reopens the directory the old umask closed" "got: $(stat -c %a "$authdir")"
+  grep -Fxq $'sudo\tchmod\t755\t'"$authdir" "$calls" ||
+    fail "the migration asks root to reopen the FIDO2 directory" "$(cat "$calls")"
+  grep -Fq $'sudo\tinstall\t-T\t' "$calls" ||
+    fail "an authfile hidden behind an untraversable directory is still repaired" "$(cat "$calls")"
+  [[ $(stat -c %i "$authfile") != "$before_inode" ]] ||
+    fail "the repair behind an untraversable directory still replaces the inode"
+  pass "migration repairs an authfile an unreadable directory hid from it"
+else
+  # The skipped block also cleared the directory fixture the previous test left
+  # at the authfile path; later blocks assume that cleanup happened.
+  rm -rf "$authfile"
+  pass "running as root; skipping the untraversable-directory repair fixture"
+fi
 
 # The narrow escalation above must not reach a machine that never registered a
 # key, which is almost all of them.

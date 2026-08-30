@@ -19,6 +19,9 @@ greetd
 greetd-tuigreet
 grim
 grub
+gum
+jq
+libxml2-legacy
 linux
 linux-firmware
 mako
@@ -44,4 +47,6 @@ wireplumber
 wl-clipboard
 wlsunset
 xdg-desktop-portal-wlr
+xdg-user-dirs
+xdg-utils
 zram-generator

@@ -6,28 +6,31 @@ test_tmp=$(mktemp -d)
 trap 'rm -rf "$test_tmp"' EXIT
 
 mock_bin="$test_tmp/bin"
-hyprctl_log="$test_tmp/hyprctl.log"
+swaymsg_log="$test_tmp/swaymsg.log"
 mkdir -p "$mock_bin"
 
-cat >"$mock_bin/hyprctl" <<'SH'
+cat >"$mock_bin/swaymsg" <<'SH'
 #!/bin/bash
 
-if [[ $1 == "clients" ]]; then
-  printf '[{"address":"0xabc"},{"address":"0xdef"}]\n'
+if [[ ${1:-} == "-t" && ${2:-} == "get_tree" ]]; then
+  printf '{"type":"root","nodes":[
+    {"type":"con","pid":11,"id":5,"app_id":"foot"},
+    {"type":"output","id":90,"nodes":[{"type":"floating_con","pid":12,"id":6,"app_id":"imv"}]}
+  ]}\n'
 else
-  printf '%s\n' "$*" >>"$HYPRCTL_LOG"
+  printf '%s\n' "$*" >>"$SWAYMSG_LOG"
 fi
 SH
-chmod +x "$mock_bin/hyprctl"
+chmod +x "$mock_bin/swaymsg"
 
-PATH="$mock_bin:$PATH" HYPRCTL_LOG="$hyprctl_log" "$ROOT/bin/omarchy-hyprland-window-close-all"
+PATH="$mock_bin:$PATH" SWAYMSG_LOG="$swaymsg_log" "$ROOT/bin/omarchy-hyprland-window-close-all"
 
 expected_log="$test_tmp/expected.log"
 cat >"$expected_log" <<'EOF'
-dispatch hl.dsp.window.close({ window = "address:0xabc" })
-dispatch hl.dsp.window.close({ window = "address:0xdef" })
-dispatch hl.dsp.focus({ workspace = "1" })
+[con_id=5] kill
+[con_id=6] kill
+workspace number 1
 EOF
 
-diff -u "$expected_log" "$hyprctl_log" || fail "close-all targets each window with the Lua dispatcher"
-pass "close-all targets each window with the Lua dispatcher"
+diff -u "$expected_log" "$swaymsg_log" || fail "close-all targets each window and returns to workspace 1"
+pass "close-all targets each window and returns to workspace 1"

@@ -129,14 +129,14 @@ grep -F 'ddcutil --bus 7 --skip-ddc-checks --noverify setvcp 10 5' "$call_log" >
   fail "external low brightness writes the one-percent target"
 pass "external low brightness uses a one-percent step"
 
-cat >"$mock_bin/hyprctl" <<'SH'
+cat >"$mock_bin/swaymsg" <<'SH'
 #!/bin/bash
 printf '%s\n' '[
   {"name":"DP-1","focused":true,"make":"HPN","model":"OMEN X 25f"},
   {"name":"DP-2","focused":false,"make":"Apple Computer Inc","model":"StudioDisplay"}
 ]'
 SH
-chmod +x "$mock_bin/hyprctl"
+chmod +x "$mock_bin/swaymsg"
 
 PATH="$mock_bin:$PATH" "$ROOT/bin/omarchy-hyprland-monitor-focused-apple" DP-2 || \
   fail "named Apple display is detected independently of focus"

@@ -4,6 +4,13 @@ set -euo pipefail
 
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
+# omarchy-dev-link refuses to run as root by design, so there is nothing
+# meaningful to exercise on a root-only bench.
+if (( EUID == 0 )); then
+  pass "running as root; skipping omarchy-dev-link coverage"
+  exit 0
+fi
+
 test_tmp=$(mktemp -d)
 trap 'rm -rf "$test_tmp"' EXIT
 

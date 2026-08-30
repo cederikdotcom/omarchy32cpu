@@ -385,6 +385,10 @@ exec swayidle -w timeout 300 'omarchy-system-lock' timeout 600 'swaymsg "output 
 exec omarchy-provision-first-run
 exec omarchy-powerprofiles-init
 
+# Re-apply persisted input-device disables (omarchy-toggle-input-device stores
+# the device name as data). exec_always so a config reload re-applies them too.
+exec_always bash -c 'for f in "$HOME"/.local/state/omarchy/toggles/sway/*-disabled-name; do [[ -f $f ]] && swaymsg -- input "$(<"$f")" events disabled; done; true'
+
 # Run post-boot hooks after startup config has loaded.
 exec sleep 2 && omarchy-hook post-boot
 

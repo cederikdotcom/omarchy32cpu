@@ -6,13 +6,18 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
 require_command jq
 
+# Monitor connector names are interpolated into swaymsg command strings, so
+# every path that does it (internal toggle, clamshell sync, scaling) must
+# refuse anything but a plain connector name.
+
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 
 stub_dir="$tmpdir/bin"
 home_dir="$tmpdir/home"
 monitors_json="$tmpdir/monitors.json"
-flag_dir="$home_dir/.local/state/omarchy/toggles/hypr"
+flag_dir="$home_dir/.local/state/omarchy/toggles/sway"
+sway_log="$tmpdir/swaymsg.log"
 mkdir -p "$stub_dir" "$flag_dir"
 
 make_stub() {
@@ -24,100 +29,79 @@ make_stub() {
 
 make_stub omarchy-notification-send ':'
 make_stub omarchy-hyprland-monitor-external-active 'exit 0'
-make_stub omarchy-hyprland-toggle-disabled 'exit 0'
-make_stub omarchy-hyprland-toggle ':'
 make_stub omarchy-hyprland-monitor-internal ':'
-make_stub omarchy-hyprland-monitor-internal-mirror ':'
 make_stub omarchy-hw-clamshell 'exit 0'
 make_stub omarchy-hyprland-monitor-laptop 'printf "%s\n" "$LAPTOP_NAME"'
-make_stub hyprctl 'case "$1" in
-  monitors) cat "$MONITORS_JSON" ;;
-  eval) printf "%s\n" "$2" >>"$EVAL_LOG" ;;
-esac'
-
-eval_log="$tmpdir/eval.log"
+make_stub swaymsg 'if [[ ${1:-} == "-t" && ${2:-} == "get_outputs" ]]; then
+  cat "$MONITORS_JSON"
+else
+  printf "%s\n" "$*" >>"$SWAY_LOG"
+fi'
 
 run_monitor() {
   local command=$1
   shift
-  : >"$eval_log"
+  : >"$sway_log"
   HOME="$home_dir" \
+    OMARCHY_PATH="$ROOT" \
     XDG_STATE_HOME="$home_dir/.local/state" \
     LAPTOP_NAME="${LAPTOP_NAME:-eDP-1}" \
     MONITORS_JSON="$monitors_json" \
-    EVAL_LOG="$eval_log" \
+    SWAY_LOG="$sway_log" \
     PATH="$stub_dir:$ROOT/bin:$PATH" \
     "$ROOT/bin/$command" "$@"
 }
 
-printf '[{"name":"eDP-1"},{"name":"DP-3"}]\n' >"$monitors_json"
+printf '[{"name":"eDP-1","active":true},{"name":"DP-3","active":true}]\n' >"$monitors_json"
 
-disable_flag="$flag_dir/internal-monitor-disable.lua"
+disable_flag="$flag_dir/internal-monitor-disable.conf"
 run_monitor omarchy-hyprland-monitor-internal off
-grep -Fx 'hl.monitor({ output = "eDP-1", disabled = true })' "$disable_flag" >/dev/null ||
-  fail "internal off writes the connector name into the toggle flag"
+[[ -f $disable_flag ]] || fail "internal off records the disable toggle flag"
+grep -Fx 'output eDP-1 disable' "$sway_log" >/dev/null ||
+  fail "internal off disables the named connector"
 pass "internal off accepts a plain connector name"
 
 rm -f "$disable_flag"
 set +e
-LAPTOP_NAME='eDP-1", disabled = false })os.execute("calc")--' \
+LAPTOP_NAME='eDP-1 disable; exec calc; output DP-3' \
   run_monitor omarchy-hyprland-monitor-internal off >/dev/null 2>&1
 status=$?
 set -e
-(( status != 0 )) || fail "internal off rejects a monitor name with Lua metacharacters"
-[[ ! -e $disable_flag ]] || fail "an unsafe monitor name is not written as Lua"
+(( status != 0 )) || fail "internal off rejects a monitor name with command metacharacters"
+[[ ! -e $disable_flag ]] || fail "an unsafe monitor name records no toggle flag"
+if grep -F 'exec calc' "$sway_log" >/dev/null; then
+  fail "an unsafe monitor name never reaches swaymsg"
+fi
 pass "internal off refuses an unsafe monitor name"
 
-mirror_flag="$flag_dir/internal-monitor-mirror.lua"
-run_monitor omarchy-hyprland-monitor-internal-mirror on
-grep -Fx 'hl.monitor({ output = "DP-3", mode = "preferred", position = "auto", scale = 1, mirror = "eDP-1" })' \
-  "$mirror_flag" >/dev/null ||
-  fail "mirror on writes the connector names into the toggle flag"
-pass "mirror on accepts plain connector names"
-
-rm -f "$mirror_flag"
-printf '[{"name":"eDP-1"},{"name":"HEAD\\" })os.execute(\\"calc\\")--"}]\n' >"$monitors_json"
-set +e
-run_monitor omarchy-hyprland-monitor-internal-mirror on >/dev/null 2>&1
-status=$?
-set -e
-(( status != 0 )) || fail "mirror on rejects an external name with Lua metacharacters"
-[[ ! -e $mirror_flag ]] || fail "an unsafe external monitor name is not written as Lua"
-pass "mirror on refuses an unsafe headless output name"
-
-# The clamshell sync writes the internal-monitor name into generated Lua too.
-clamshell_flag="$flag_dir/internal-monitor-clamshell.lua"
-printf '[{"name":"eDP-1"}]\n' >"$monitors_json"
-rm -f "$clamshell_flag"
+# The clamshell sync interpolates the internal-monitor name too.
+printf '[{"name":"eDP-1","active":true},{"name":"DP-3","active":true}]\n' >"$monitors_json"
 run_monitor omarchy-hyprland-monitor-clamshell
-grep -Fx 'hl.monitor({ output = "eDP-1", disabled = true })' "$clamshell_flag" >/dev/null ||
-  fail "clamshell disable writes the connector name into the toggle flag"
+grep -Fx 'output eDP-1 disable' "$sway_log" >/dev/null ||
+  fail "clamshell disables the named internal connector"
 pass "clamshell disable accepts a plain connector name"
 
-rm -f "$clamshell_flag"
 set +e
-LAPTOP_NAME='eDP-1", disabled = true })os.execute("calc")--' \
+LAPTOP_NAME='eDP-1 disable; exec calc' \
   run_monitor omarchy-hyprland-monitor-clamshell >/dev/null 2>&1
 status=$?
 set -e
-(( status != 0 )) || fail "clamshell rejects a monitor name with Lua metacharacters"
-[[ ! -e $clamshell_flag ]] || fail "an unsafe internal monitor name is not written as clamshell Lua"
+(( status != 0 )) || fail "clamshell rejects a monitor name with command metacharacters"
+[[ ! -s $sway_log ]] || fail "an unsafe internal monitor name never reaches swaymsg" "$(<"$sway_log")"
 pass "clamshell refuses an unsafe internal monitor name"
 
-# The scaling command eval's the focused-monitor name into a Lua string.
-printf '[{"name":"eDP-1","focused":true,"scale":1.0,"width":1920,"height":1080,"refreshRate":60.0}]\n' \
-  >"$monitors_json"
+# The scaling command interpolates the focused-monitor name.
+printf '[{"name":"eDP-1","focused":true,"active":true,"scale":1.0}]\n' >"$monitors_json"
 run_monitor omarchy-hyprland-monitor-scaling 1.6
-grep -F 'hl.monitor({ output = "eDP-1"' "$eval_log" >/dev/null ||
-  fail "scaling eval's the focused connector name"
+grep -Fx 'output eDP-1 scale 1.6' "$sway_log" >/dev/null ||
+  fail "scaling applies the focused connector name"
 pass "scaling accepts a plain connector name"
 
-printf '[{"name":"eDP-1\\" })os.execute(\\"calc\\")--","focused":true,"scale":1.0,"width":1920,"height":1080,"refreshRate":60.0}]\n' \
-  >"$monitors_json"
+printf '[{"name":"eDP-1 scale 1; exec calc","focused":true,"active":true,"scale":1.0}]\n' >"$monitors_json"
 set +e
 run_monitor omarchy-hyprland-monitor-scaling 1.6 >/dev/null 2>&1
 status=$?
 set -e
-(( status != 0 )) || fail "scaling rejects a focused monitor name with Lua metacharacters"
-[[ ! -s $eval_log ]] || fail "an unsafe focused monitor name is not eval'd as Lua"
+(( status != 0 )) || fail "scaling rejects a focused monitor name with command metacharacters"
+[[ ! -s $sway_log ]] || fail "an unsafe focused monitor name never reaches swaymsg" "$(<"$sway_log")"
 pass "scaling refuses an unsafe focused monitor name"

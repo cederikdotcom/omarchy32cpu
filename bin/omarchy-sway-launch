@@ -37,16 +37,18 @@ export XCOMPOSEFILE="$HOME/.XCompose"
 
 # Keyboard layout from the installer's /etc/vconsole.conf (wlroots reads the
 # XKB_DEFAULT_* variables). Translation of default/hypr/input.lua.
+# OMARCHY_VCONSOLE_CONF exists for the tests, which cannot write /etc.
+vconsole_conf=${OMARCHY_VCONSOLE_CONF:-/etc/vconsole.conf}
 xkb_layout=us
 xkb_variant=""
-if [[ -r /etc/vconsole.conf ]]; then
+if [[ -r $vconsole_conf ]]; then
   while IFS='=' read -r key value; do
     value=${value%\"} value=${value#\"}
     case $key in
       XKBLAYOUT) xkb_layout=$value ;;
       XKBVARIANT) xkb_variant=$value ;;
     esac
-  done </etc/vconsole.conf
+  done <"$vconsole_conf"
 fi
 
 # CapsLock is the compose key; Caps Lock itself moves to both Shifts, and the
@@ -54,8 +56,9 @@ fi
 xkb_options="compose:caps,shift:both_capslock_cancel"
 
 # Keybindings resolve against the first layout, so a non-Latin layout needs a
-# Latin one in front or the Latin-keysym bindings go dead. Keep in sync with
-# the list in etc/mkinitcpio.conf.d/omarchy_hooks.conf.
+# Latin one in front or the Latin-keysym bindings go dead. (Upstream kept this
+# list in sync with etc/mkinitcpio.conf.d/omarchy_hooks.conf for the LUKS
+# keymap; the Lite initramfs dropped that logic, so this is the only copy.)
 non_latin_layouts=" af am ara bd bg by et ge gr il in iq ir kg kh kz la lk mk mm mn mv np rs ru sy th tj ua "
 first_layout=${xkb_layout%%,*}
 if [[ $non_latin_layouts == *" $first_layout "* ]]; then
@@ -71,5 +74,9 @@ export XKB_DEFAULT_OPTIONS=$xkb_options
 
 # Optional user session environment overrides.
 [[ -f "$HOME/.config/omarchy/session-env" ]] && . "$HOME/.config/omarchy/session-env"
+
+# The session shares the systemd user bus (no dbus-run-session: a private
+# bus would split notifications and user units onto different buses).
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
 
 exec sway "$@"
