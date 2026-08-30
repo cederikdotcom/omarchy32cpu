@@ -19,10 +19,14 @@ The full Omarchy workflow with every pixel drawn by the CPU:
   the session)
 - GRUB i386-efi as BOOTIA32.EFI replaces limine + 64-bit UKI
 - archlinux32 i686 repos replace Arch x86_64 + pkgs.omarchy.org
-- No preinstalled applications: a 46-package core, the user installs
+- No preinstalled applications: a 55-package core, the user installs
   their own apps
 - Kept unchanged: the 24-color theme engine, the bash environment, the
   omarchy CLI router, keybinding philosophy, zram/oomd memory tuning
+- New in the fork: `omarchy-remote-view` (menu: Trigger > Toggle >
+  Remote View) serves the live session over VNC via wayvnc/wlroots
+  screencopy - fully CPU-side, ideal for the cloud-hosted use case.
+  Localhost-only; reach it with `ssh -L 5901:127.0.0.1:5901 user@host`
 
 ## Validated (cloud bench: i686 chroot + QEMU with IA32 OVMF firmware)
 
@@ -99,7 +103,15 @@ The full Omarchy workflow with every pixel drawn by the CPU:
 14. foot 1.13 (the archlinux32 version) rejects the `[colors-dark]`
    section and `cursor=` inside `[colors]` that the foot template
    rendered; template moved to `[colors]` plus a `[cursor]` section.
-15. The test triage across test/shell.d caught 7 more code
+15. Dependency-drift bug number three: archlinux32's wayvnc 0.8.0
+   needs neatvnc 0.8 but the repo ships 0.5.4 (undefined symbol at
+   startup). Fixed by a self-built neatvnc 0.8.1 i686 package - the
+   fork repo's second override, alongside fontconfig.
+16. Some archlinux32 packages are signed by a key the shipped keyring
+   only marginally trusts (TasosSah packaging key); installs abort
+   until `pacman-key --lsign-key 80EC18799E8BCD375C6E64ABE4D41569196B1160`.
+   Documented in the install runbook.
+17. The test triage across test/shell.d caught 7 more code
    regressions, fixed in commit b6659167 (focus-app matching,
    unported launch-shell/restart-shell, monitor-watch recovery,
    toggle-input-device state, two portable-awk bugs, an omarchy-menu
@@ -109,10 +121,12 @@ The full Omarchy workflow with every pixel drawn by the CPU:
 
 ### Blocking a real MacBook install
 
-- **Fork package repo does not exist yet.** The fontconfig 2.18.3
-  override (mandatory - sway will not start without it) and future
-  i686 rebuilds (mbpfan, isight-firmware-tools, drift fixes) need a
-  hosted pacman repo wired into default/pacman/*.conf. Until then the
+- **Fork package repo does not exist yet.** Two overrides already
+  exist and need hosting: fontconfig 2:2.18.3 (mandatory - sway will
+  not start without it) and neatvnc 0.8.1 (needed by wayvnc remote
+  view). Future i686 rebuilds (mbpfan, isight-firmware-tools, drift
+  fixes) join them. All need a hosted pacman repo wired into
+  default/pacman/*.conf. Until then the
   override installs manually per the runbook.
 - **No install ISO.** The install path is: boot the archlinux32 ISO,
   partition, pacstrap the core list, put the repo at /usr/share/omarchy,

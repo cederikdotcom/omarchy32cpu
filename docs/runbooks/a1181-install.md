@@ -25,7 +25,7 @@ Rehearsal lessons now baked into the steps below:
 
 - Target: MacBook1,1 (early 2006 Core Duo, A1181, EMC 2092) on
   archlinux32 i686. 2 GB RAM cap; max it (2x1 GB).
-- Omarchy Lite: no preinstalled applications. The ~45-package core is
+- Omarchy Lite: no preinstalled applications. The 55-package core is
   listed in the gap analysis.
 
 ## Prepare install media
@@ -47,8 +47,12 @@ Rehearsal lessons now baked into the steps below:
    archlinux32-keyring and populate it. Known rough edges: occasional
    stale package signatures and dependency drift (see gap analysis,
    "archlinux32 findings"); the fork repo carries rebuilt overrides,
-   fontconfig 2.18.3 first. Without the override, sway fails with
-   `undefined symbol: FcConfigSetDefaultSubstitute`.
+   fontconfig 2.18.3 first (without it sway fails with `undefined
+   symbol: FcConfigSetDefaultSubstitute`), neatvnc 0.8.1 second
+   (without it wayvnc fails on `nvnc_client_get_auth_username`). If
+   installs abort on "marginal trust" signatures, run
+   `pacman-key --lsign-key 80EC18799E8BCD375C6E64ABE4D41569196B1160`
+   (the TasosSah packaging key).
 4. `pacstrap` base, linux, linux-firmware, then the Lite core from
    `install/omarchy-base.packages` on this branch.
 5. Bootloader, inside the chroot:
@@ -81,6 +85,10 @@ Rehearsal lessons now baked into the steps below:
 - Theme switch: `omarchy-theme-set <name>` (renders sway/waybar/mako
   templates).
 - Fan control: mbpfan as a service; temps via `sensors` (applesmc).
+- Remote view: `omarchy-remote-view on` (or menu: Trigger > Toggle >
+  Remote View) serves the session on 127.0.0.1:5901; from another
+  machine: `ssh -L 5901:127.0.0.1:5901 <user>@<host>`, then VNC to
+  localhost:5901.
 
 ## Troubleshooting
 

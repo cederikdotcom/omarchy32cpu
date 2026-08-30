@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# omarchy:summary=Toggle a VNC server for the running sway session (wayvnc)
+# omarchy:args=[on|off|toggle|status] [--port=<port>]
+
+# Serves the live session over VNC via wlroots screencopy, which works
+# under the pixman renderer - the natural remote path for a CPU-only
+# desktop, cloud-hosted ones especially. Binds localhost only: reach it
+# through an SSH tunnel (ssh -L 5901:127.0.0.1:5901 user@host). The
+# default ufw posture blocks direct LAN exposure anyway.
+
+port=5901
+action="${1:-toggle}"
+
+for arg in "$@"; do
+  [[ $arg == --port=* ]] && port="${arg#--port=}"
+done
+
+running() {
+  pgrep -x wayvnc >/dev/null
+}
+
+case "$action" in
+  on)
+    if running; then
+      echo "Remote view already running on 127.0.0.1:$port"
+    else
+      setsid -f wayvnc 127.0.0.1 "$port" >/dev/null 2>&1
+      sleep 1
+      if running; then
+        omarchy-notification-send "Remote view on" "VNC on 127.0.0.1:$port (tunnel via SSH)"
+        echo "Remote view started on 127.0.0.1:$port"
+      else
+        echo "Failed to start wayvnc" >&2
+        exit 1
+      fi
+    fi
+    ;;
+  off)
+    pkill -x wayvnc && omarchy-notification-send "Remote view off" "VNC server stopped"
+    echo "Remote view stopped"
+    ;;
+  toggle)
+    if running; then
+      exec "$0" off
+    else
+      exec "$0" on --port="$port"
+    fi
+    ;;
+  status)
+    if running; then
+      echo "on (127.0.0.1:$port)"
+    else
+      echo "off"
+      exit 1
+    fi
+    ;;
+  *)
+    echo "Usage: omarchy-remote-view [on|off|toggle|status] [--port=<port>]" >&2
+    exit 1
+    ;;
+esac
