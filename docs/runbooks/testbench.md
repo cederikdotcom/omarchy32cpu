@@ -18,10 +18,12 @@ development. Created 2026-08-30. Delete it when the port ships.
 - SigLevel is `Never` in the chroot pacman.conf (throwaway bench; a
   stale mirror signature on libvterm forced it). The real install uses
   the keyring.
-- The Lite desktop core is installed. The rebuilt
-  `fontconfig-2:2.18.3-2-i686.pkg.tar.zst` lives in
-  `/home/tester/fontconfig/` inside the chroot; without it sway dies on
-  a fontconfig symbol (see the gap analysis).
+- The Lite desktop core is installed. The fork's override packages are
+  built here and live inside the chroot:
+  `/home/tester/fontconfig/fontconfig-2:2.18.3-2-i686.pkg.tar.zst`
+  (without it sway dies on a fontconfig symbol) and
+  `/home/tester/neatvnc/neatvnc-0.8.1-3-i686.pkg.tar.zst` (without it
+  wayvnc dies on a neatvnc symbol). Copy them into any new image.
 - Headless sway smoke test (run as user `tester`):
   `install -d -o tester -g tester /run/user/1000`, then as tester with
   `XDG_RUNTIME_DIR=/run/user/1000 WLR_BACKENDS=headless
