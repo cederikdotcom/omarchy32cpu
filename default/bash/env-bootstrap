@@ -15,10 +15,12 @@ else
 fi
 export OMARCHY_PATH
 
-# Only prepend in dev-link mode. On a production install, the binaries are
-# already on PATH as /usr/bin/omarchy-* via the omarchy package — prepending
-# /usr/share/omarchy/bin would just be noise.
-if [ "$OMARCHY_PATH" != /usr/share/omarchy ]; then
+# Prepend in dev-link mode, and on package-less installs (this fork has no
+# omarchy package yet, so nothing symlinks omarchy-* into /usr/bin; without
+# the prepend, sway bindings and swaymsg exec cannot find any omarchy
+# command). When a package later provides /usr/bin/omarchy, this stays a
+# no-op on production installs.
+if [ "$OMARCHY_PATH" != /usr/share/omarchy ] || [ ! -x /usr/bin/omarchy ]; then
   case ":$PATH:" in
     *":${OMARCHY_PATH%/}/bin:"*) ;;
     *) PATH="${OMARCHY_PATH%/}/bin${PATH:+:$PATH}" ;;
