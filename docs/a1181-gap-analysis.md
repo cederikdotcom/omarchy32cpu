@@ -1,216 +1,162 @@
-# Omarchy Quattro on the 2006 MacBook A1181: gap analysis
+# Omarchy 32-bit Lite: gap analysis
 
-Target: Omarchy 4 "Quattro" (this branch is based on the v4.0.1 tag) on the
-2006 Apple MacBook A1181. Analysis date: 2026-08-30. Every claim below was
-checked against the repo tree and against primary sources, then adversarially
-re-verified by independent review passes (0 refutations).
+Target: an Omarchy Lite rendition for the 2006 MacBook1,1 (A1181, EMC
+2092), built on archlinux32 i686. This branch is based on the upstream
+v4.0.1 "Quattro" tag. Analysis date: 2026-08-30, updated the same day
+after chroot validation on the cloud test bench.
+
+Scope: Omarchy Lite means the core experience with no preinstalled
+applications. No browser, no Docker, no media or office apps. The user
+installs what they want. The Lite core is about 45 packages.
 
 ## Verdict
 
-Stock Omarchy Quattro cannot run on any 2006 A1181. Three hard blockers:
+Stock Omarchy cannot run on the MacBook1,1 for three reasons: the CPU is
+32-bit only (Core Duo "Yonah"), the GPU (GMA 950) cannot serve the GLES3
+compositor stack (Hyprland, Quickshell, the SDDM greeter), and the 32-bit
+Apple EFI cannot execute the limine 64-bit UKI.
 
-1. **GPU.** Hyprland >= 0.50 requires OpenGL ES 3.0+ (the legacy GLES2
-   renderer was removed in 0.50). The GMA 950 (Intel i945, gen3) tops out at
-   GL 2.1 / GLES 2.0 via Mesa i915g, with no hardware vertex shaders and no
-   shader software fallback. Quickshell (Qt6 Quick) and the SDDM greeter
-   (which itself starts Hyprland) fail for the same reason. llvmpipe on a
-   2.0 GHz Core 2 Duo is unusable.
-2. **Boot.** Omarchy boots via limine with a 64-bit UKI
-   (`ENABLE_UKI=yes`, `/boot/EFI/Linux/omarchy_linux.efi`). Both A1181
-   models have 32-bit (IA32) Apple EFI 1.10, which cannot execute a 64-bit
-   EFI binary.
-3. **CPU, on the early model only.** The MacBook1,1 (early 2006, Core Duo
-   "Yonah") is 32-bit only. It can never run Arch x86_64 or this repo.
-   archlinux32 carries only a fossilized Hyprland 0.4.5 on wlroots 0.16.
+All three have working adaptations on archlinux32:
 
-The split by model is decisive:
+1. **CPU:** archlinux32 i686 carries the entire Lite core (verified on the
+   mirrors and installed in a test chroot 2026-08-30): sway 1:1.8 with
+   wlroots 0.16.1 (pixman renderer included), swaylock, swayidle, waybar
+   0.9.15, foot, fuzzel, mako, greetd-tuigreet, mesa 1:24.0.4 plus
+   mesa-amber 21.3.9, kernel 6.19, networkmanager 1.56, pipewire.
+2. **GPU:** sway with `WLR_RENDERER=pixman` (pure-CPU compositing, needs
+   only KMS; i915 KMS on i945 is mature in-kernel). VALIDATED 2026-08-30:
+   sway 1.8/pixman runs and answers IPC on i686 in the test chroot. The
+   GMA 950 KMS path itself still needs the on-hardware spike.
+3. **Boot:** a 32-bit kernel boots natively from the 32-bit Apple EFI via
+   GRUB `--target=i386-efi` as `BOOTIA32.EFI`. No mixed mode, no UKI.
+   Apple's CSM/BIOS path is the fallback.
 
-- **MacBook2,1 (late 2006, Core 2 Duo "Merom"): feasible.** Merom is
-  x86-64-v1 (SSSE3, no SSE4) and Arch's baseline is still generic v1, so
-  official Arch runs. GRUB `--target=i386-efi` loading a 64-bit kernel via
-  EFI mixed mode is documented working on this exact machine. About 60% of
-  this repo (theming engine, bash environment, CLI router, zram/oomd tuning,
-  migrations framework) is compositor-agnostic and carries over unchanged.
-- **MacBook1,1: out of scope.** The honest path there is archlinux32 or
-  Void i686 with i3/X11, built separately, not a fork of this repo.
-
-**This fork therefore targets the MacBook2,1 (and later Core 2 Duo A1181s
-through MacBook4,1).** The delivered experience is Omarchy's workflow,
-theming, keybindings and CLI tooling on sway with pure-CPU compositing:
-no animations, no blur, no screen sharing. The silicon could never draw
-those anyway.
-
-## Scope decision: Omarchy Lite (2026-08-30)
-
-The fork ships as "Omarchy Lite": the core experience with no preinstalled
-applications. No browser, no Docker, no media or office apps. The user
-installs what they want. This deletes gaps 7, 10, 17 and 18 below and
-shrinks 9, 12 and 16. The Lite core is about 45 packages:
-
-- System: base, linux, linux-firmware, grub, efibootmgr, networkmanager,
-  pipewire, wireplumber, pipewire-pulse, polkit, brightnessctl,
-  zram-generator, greetd-tuigreet, seatd
-- Desktop: sway, swaybg, swaylock, swayidle, waybar, fuzzel, mako,
-  wlsunset, grim, slurp, wl-clipboard, xdg-desktop-portal-wlr, foot
-- CLI: git, starship, tmux, neovim, fzf, ripgrep, fd, bat, btop, fastfetch
-- Mac: mbpfan; isight-firmware-tools optional
-
-With Lite scoping there are two tracks, sharing all compositor, shim,
-theme, login and boot work:
-
-- **Track A (`a1181-compat`): MacBook2,1+, official Arch x86_64.**
-  As analyzed below.
-- **Track B (`a1181-32`, planned): MacBook1,1, archlinux32 i686.**
-  Verified on the mirrors 2026-08-30: sway 1:1.8 (wlroots 0.16, pixman
-  renderer supported), swaylock 1.8.5, swayidle 1.9, waybar 0.9.15, foot,
-  fuzzel, mako, greetd-tuigreet, mesa 1:24.0.4 plus mesa-amber 21.3.9,
-  kernel 6.19, networkmanager 1.56, pipewire 1:0.3.65. The whole Lite core
-  is available. Delta from Track A: point default/pacman configs and
-  mirrorlists at archlinux32, rebuild the omarchy-own packages for i686
-  from omarchy-pkgs, pin to the versions above. Boot is simpler: a 32-bit
-  kernel on the 32-bit Apple EFI boots via plain GRUB i386-efi, no mixed
-  mode. Cap: 2 GB RAM; a sway/pixman + foot session idles around 350-400
-  MB, which fits. Caveats: repo browsers are ancient (chromium 90, firefox
-  114); if a browser is wanted, use Mozilla's official i686 Firefox
-  tarball (verify glibc compatibility first). archlinux32 is a small
-  volunteer project; expect to rebuild an occasional package.
+What Omarchy loses: animations, blur, portal screen sharing (pixman does
+not support screencast), hardware video decode, Vulkan. What survives:
+the theming engine, keybinding philosophy, bash environment, CLI router,
+and the zram/oomd memory tuning, which fits a 2 GB machine well.
 
 ## Gap matrix
 
-Severity: **blocker** = stock Omarchy does not start. **major** = works but
-defeats the machine or the fork. **minor** = degraded or wasteful.
-**cosmetic** = nice to trim.
+Severity: **blocker** = stock Omarchy does not start. **major** = works
+but defeats the machine or the fork. **minor** = degraded or wasteful.
 
-| # | Component | Omarchy requires | A1181 reality | Severity |
-|---|-----------|------------------|---------------|----------|
-| 1 | CPU / userland | Arch x86_64 + pkgs.omarchy.org (x86_64 only) | MacBook1,1 is 32-bit only; MacBook2,1 meets x86-64-v1 | blocker (1,1 only) |
-| 2 | Hyprland | GLES 3.0+, no software path | GMA 950 caps at GL 2.1 / GLES 2.0, partly CPU-emulated | blocker |
-| 3 | Quickshell (bar, menu, OSD, lock) | Qt6 Quick with working GL RHI + Hyprland IPC | Fragile-to-broken GL; nothing to talk to without Hyprland | blocker |
-| 4 | SDDM greeter | `CompositorCommand=start-hyprland` + QML theme | Greeter needs the same GLES3 stack; login fails before the desktop | blocker |
-| 5 | limine + UKI boot | 64-bit UKI on 64-bit UEFI | IA32 Apple EFI cannot run it; GRUB i386-efi or CSM works | blocker |
-| 6 | Mesa gen3 driver | Accelerated Mesa assumed | Needs i915g; current Arch mesa (1:26.2.1) ships it, so no mesa-amber needed. Treat GL as decoration only | major |
-| 7 | Package set / RAM | 147 base packages incl. chromium, docker, kdenlive, obs, libreoffice, obsidian, dotnet; 4-8 GB floor | MacBook2,1 caps at ~3 GB usable on a 5400 rpm disk | major |
-| 8 | hyprctl in bin/ | ~53 of 441 bin scripts call hyprctl (incl. 24 `omarchy-hyprland-*`) | All dead once Hyprland is replaced | major |
-| 9 | Update channel | Migrations + hooks track upstream omarchy packages | Upstream updates would reinstall Hyprland/quickshell/limine | major |
-| 10 | Chromium / webapps | Chromium with Wayland ozone as webapp runtime | GPU blocklisted on GMA 950; each webapp costs 300-500 MB; no VAAPI | major |
-| 11 | Theme templates | 5 of 22 themes ship `hyprland.lua` via `default/themed/hyprland.lua.tpl` | Templates target a compositor the fork drops; the 24-color engine itself is portable | minor |
-| 12 | btrfs + snapper + snapshot boot | btrfs root, snapper, limine-snapper-sync, btrfs-overlayfs hook | Slow on a 2006 disk; snapshot boot entries depend on the dropped limine path | minor |
-| 13 | LUKS argon2id cost | `--pbkdf argon2id --iter-time 2000` | Many seconds per unlock on Merom with 3 GB | minor |
-| 14 | Hardware-detect false positives | vulkan.sh fires on any Intel VGA; sof-firmware.sh on any Intel audio | ANV needs Gen7+; ICH7 audio uses snd_hda_intel, never SOF | minor |
-| 15 | A1181 enablement | None exists for pre-2015 Macs | iSight needs isight-firmware-tools + blob extraction; fans need applesmc + mbpfan; ath9k wifi is fine but disable NM powersave | minor |
-| 16 | Screen capture | grim/slurp + gpu-screen-recorder (VAAPI) | No encoder on GMA 950; portal screencast does not work under the pixman renderer at all | minor |
-| 17 | Plymouth | Boot splash in initramfs | Works, but costs boot time and RAM | cosmetic |
-| 18 | voxtype / OCR / transcode | Whisper dictation hook, tesseract, ffmpeg helpers | Run, but unusable at Merom speed | cosmetic |
+| # | Component | Omarchy requires | MacBook1,1 reality | Severity | Adaptation |
+|---|-----------|------------------|--------------------|----------|------------|
+| 1 | CPU / userland | Arch x86_64 + pkgs.omarchy.org | 32-bit Core Duo | blocker | archlinux32 i686 repos; rebuild omarchy-own packages for i686 |
+| 2 | Hyprland | GLES 3.0+ | GMA 950 caps at GL 2.1 | blocker | sway 1.8 + pixman renderer (validated i686, chroot) |
+| 3 | Quickshell | Qt6 Quick GL + Hyprland IPC | No GL, no Hyprland | blocker | waybar + fuzzel + mako + swaylock behind omarchy-shell/bar/menu/osd shims |
+| 4 | SDDM greeter | Hyprland + QML | Same GPU wall | blocker | greetd + tuigreet, or getty autologin |
+| 5 | limine + 64-bit UKI | 64-bit UEFI | 32-bit Apple EFI | blocker | GRUB i386-efi as BOOTIA32.EFI, plain kernel+initramfs, ENABLE_UKI=no |
+| 6 | Mesa for gen3 | Accelerated Mesa assumed | Needs i915g or mesa-amber | minor | Both on archlinux32; pixman path does not depend on GL |
+| 7 | hyprctl in bin/ | ~53 of 441 scripts call hyprctl | Dead without Hyprland | major | Port 24 omarchy-hyprland-* to swaymsg; omarchy-compositor-ctl shim for the rest |
+| 8 | Update channel | Tracks upstream x86_64 packages | Would reinstall Hyprland/limine | major | Fork repo or override packages; pin/fork migrations/; delete the 2 Hyprland libalpm hooks |
+| 9 | Theme templates | 5 of 22 themes ship hyprland.lua | Targets a dropped compositor | minor | Add sway.tpl + waybar/mako templates; the 24-color engine is portable |
+| 10 | btrfs + snapper | btrfs root, snapshot boot entries | Slow 2006 disk; boot entries need limine | minor | ext4 default; guard snapper.sh; drop hibernation-setup |
+| 11 | LUKS argon2id cost | iter-time 2000, memory-hard | Seconds to tens of seconds on 2 GB | minor | Lower cost or make FDE opt-in |
+| 12 | Hardware-detect false positives | vulkan.sh on any Intel VGA; sof-firmware.sh on any Intel audio | ANV needs Gen7+; ICH7 is snd_hda_intel | minor | Guard both against i945 (PCI 8086:27a2) |
+| 13 | A1181 enablement | None exists upstream | iSight needs extracted firmware; fans need mbpfan; ath5k powersave drops | minor | New DMI-guarded install/hardware/apple/fix-a1181.sh |
+| 14 | Screen capture | gpu-screen-recorder (VAAPI) | No encoder; no screencast under pixman | minor | grim stays; wf-recorder (CPU x264) for short clips |
+| 15 | Plymouth | Boot splash | Costs boot time and RAM | minor | Drop; boot to tty into greetd |
 
-Affected files per gap are listed in the worklist below and in the commit
-history of this branch as the work lands.
+Deleted by the Lite scope (no preinstalled apps): the 147-package app
+fleet gap, the Chromium/webapps gap, voxtype/OCR/transcode, hibernation.
 
-## Recommended path: "Omarchy Legacy" for the MacBook2,1
+## archlinux32 findings from the test bench (2026-08-30)
 
-**Keep unchanged (~60% of the repo):** `default/bash`, the 24-color theme
-engine and all non-hypr theme assets, foot/tmux/nvim/starship configs, the
-`bin/` CLI router and its ~380 compositor-agnostic scripts, the migrations
-framework, the pacman config structure, and the zram-generator
-(`zram-size=ram`, zstd), systemd-oomd, zswap-off, sysctl and logind
-drop-ins. Those memory drop-ins are exactly right for a 3 GB machine. Also
-keep `fix-fkeys.sh` (hid_apple fnmode=2) and the LUKS provisioning flow (it
-has no TPM assumption; only retune the argon2id cost).
+Verified in a real i686 chroot (see docs/runbooks/testbench.md):
 
-**Swap:**
+- The full Lite desktop core installs and sway runs (pixman, headless).
+- **Broken pair found:** pango 1:1.57.1 needs fontconfig >= 2.16 but the
+  repo ships 2:2.14.1; sway dies with `undefined symbol:
+  FcConfigSetDefaultSubstitute`. Same in the pentium4 tree. Fix:
+  rebuild fontconfig 2.18.3 from the Arch PKGBUILD with docs disabled
+  (docbook DTDs missing) and meson >= 1.11 from pip (repo meson is
+  1.4.0). The rebuilt package is the fork's first repo-hosted override.
+- One stale package signature on the mirror (libvterm). Expect
+  occasional signature and dependency drift; this is a small volunteer
+  project. Budget for a handful of self-rebuilt packages.
+- Repo browsers are ancient (chromium 90, firefox 114). Lite ships none.
+  If a browser is wanted, use Mozilla's official i686 Firefox tarball
+  (verify glibc compatibility first).
+- pentium4 vs i686 trees carry the same versions; either works on the
+  Core Duo (it has SSE3). The fork uses i686.
 
-- Hyprland -> **sway with `WLR_RENDERER=pixman`** (pure-CPU compositing,
-  needs only KMS; i915 KMS on i945 is mature). Note: sway/pixman on this
-  exact chip has no public test report. Validate on hardware first. Since
-  i915g exposes GLES 2.0, also try sway's default GLES2 renderer; it may
-  even be hardware-accelerated. i3/X11 with the modesetting driver is the
-  proven fallback if both disappoint.
-- Quickshell -> **waybar + fuzzel + mako + swaylock + swayidle**, behind
-  thin `omarchy-shell` / `omarchy-bar` / `omarchy-menu` / `omarchy-osd`
-  shims so the existing bin/ callers keep working.
-- SDDM-on-Hyprland -> **greetd + tuigreet** (or getty autologin, which
-  matches upstream's unlock-then-autologin UX).
-- limine + UKI -> **GRUB i386-efi** installed as `BOOTIA32.EFI`, plus a
-  blessed `grub-mkstandalone` `boot.efi` for the Apple boot picker.
-  `ENABLE_UKI=no`. CSM/BIOS boot is the fallback.
-- hyprctl -> **swaymsg** via a new `omarchy-compositor-ctl` shim.
-- `hyprland.lua.tpl` -> sway/waybar/mako theme templates.
-- gpu-screen-recorder -> wf-recorder (CPU x264, short clips only).
-- btrfs + snapper -> ext4 by default.
-- hyprsunset -> wlsunset; xdg-desktop-portal-hyprland -> xdg-desktop-portal-wlr.
+## Recommended build
 
-**Drop:** quickshell, docker*, kdenlive, obs-studio, libreoffice-fresh,
-obsidian, dotnet-runtime, moonlight-qt, voxtype, plymouth, hibernation, the
-default webapp fleet, and the nvidia/vulkan/SOF/T2 hardware stacks.
+**Keep unchanged:** `default/bash`, the 24-color theme engine and all
+non-hypr theme assets, foot/tmux/nvim/starship configs, the `bin/` CLI
+router and its compositor-agnostic scripts, the migrations framework,
+zram-generator (`zram-size=ram`, zstd), systemd-oomd, zswap-off, sysctl
+and logind drop-ins, `fix-fkeys.sh`, and the LUKS provisioning flow
+(retune argon2id cost).
 
-**Add:** isight-firmware-tools, mbpfan, grub, wlsunset, wf-recorder,
-greetd-tuigreet, and a DMI-guarded `install/hardware/apple/fix-a1181.sh`.
+**Swap:** Hyprland -> sway/pixman; Quickshell -> waybar/fuzzel/mako/
+swaylock shims; SDDM -> greetd/tuigreet; limine+UKI -> GRUB i386-efi;
+hyprctl -> swaymsg; hyprland.lua.tpl -> sway/waybar/mako templates;
+gpu-screen-recorder -> wf-recorder; btrfs -> ext4; hyprsunset ->
+wlsunset; xdg-desktop-portal-hyprland -> xdg-desktop-portal-wlr.
 
-**Install approach for v1:** skip a custom ISO. Boot the stock Arch ISO
-(add an i386-efi GRUB to the USB, or use CD/CSM), pacstrap, then run this
-fork's install-script path. An IA32-bootable ISO is a later milestone.
+**Drop:** every preinstalled application, plymouth, hibernation, the
+nvidia/vulkan/SOF/T2 hardware stacks.
 
-**Updates:** pin or fork `migrations/`, delete the two Hyprland libalpm
-hooks, and point the update channel at a fork repo (or ship override
-packages with Conflicts/Provides on the omarchy desktop metapackages) so an
-upstream update cannot reinstall Hyprland, quickshell or limine.
+**Add:** isight-firmware-tools, mbpfan, grub, the rebuilt fontconfig,
+and `install/hardware/apple/fix-a1181.sh`.
 
-**Browser:** keep Chromium with `--disable-gpu` in `chromium-flags.conf` to
-skip the doomed GPU process; document Firefox with software WebRender as
-the daily browser. Expect roughly 480p video as the practical ceiling.
+**Lite core (~45 packages):**
 
-**Permanent limitations to state honestly in the README:** no animations,
-no blur, no portal screen sharing (pixman does not support screencast), no
-hardware video decode, no Vulkan.
+- System: base, linux, linux-firmware, grub, efibootmgr, networkmanager,
+  pipewire, wireplumber, pipewire-pulse, polkit, brightnessctl,
+  zram-generator, greetd, greetd-tuigreet, seatd
+- Desktop: sway, swaybg, swaylock, swayidle, waybar, fuzzel, mako,
+  wlsunset, grim, slurp, wl-clipboard, xdg-desktop-portal-wlr, foot
+- CLI: git, starship, tmux, neovim, fzf, ripgrep, fd, bat, btop,
+  fastfetch
+- Mac: mbpfan; isight-firmware-tools optional
+- Fork overrides: fontconfig 2.18.3 (and successors as drift appears)
 
 ## Worklist
 
-0. Verify a MacBook2,1 with max RAM (2x2 GB, ~3 GB usable). Declare
-   MacBook1,1 unsupported in the README.
-1. **Spike the render floor on hardware before porting anything:** minimal
-   Arch + sway at 1280x800, test both the GLES2 renderer and
-   `WLR_RENDERER=pixman`. If neither is usable, pivot to i3/X11 +
-   modesetting and adjust items 4-7.
-2. Confirm `/usr/lib/dri/i915_dri.so` on the installed mesa (present in
-   1:26.2.1-1). Set `QSG_RHI_BACKEND=software` in `default/environment.d/`
-   and document `LIBGL_ALWAYS_SOFTWARE` as the per-app escape hatch.
-3. Boot chain: `grub-install --target=i386-efi --removable` plus a blessed
-   `boot.efi`; `ENABLE_UKI=no`; remove `etc/limine-entry-tool.d/` and
-   `default/limine/`; rewrite `bin/omarchy-refresh-limine` as
-   `omarchy-refresh-grub`; trim `etc/mkinitcpio.conf.d/omarchy_hooks.conf`
-   (drop plymouth and btrfs-overlayfs).
-4. Fork `install/omarchy-base.packages` / `omarchy-other.packages` per the
-   swap/drop/add lists above. Keep foot as the blessed terminal.
-5. Write `config/sway/` replacing `config/hypr/` (bindings, rules,
-   workspaces, autostart translated from the Lua configs; `looknfeel.lua`
-   has no equivalent and is omitted). Rewrite
-   `default/wayland-sessions/omarchy.desktop` and the uwsm defaults.
-6. Shell shim layer: reimplement `bin/omarchy-shell`, `-bar`, `-menu`,
-   `-osd`, `-notification-*`, `-system-lock` over waybar/fuzzel/mako/
-   swaylock. Remove `shell/` (175 Qt/QML files) from the fork's build.
-7. IPC pass: port the 24 `bin/omarchy-hyprland-*` scripts to swaymsg and
-   route the ~29 incidental hyprctl calls through `omarchy-compositor-ctl`.
-   Delete the two Hyprland libalpm hooks.
-8. Theme pipeline: add `sway.tpl` + waybar/mako color templates next to
-   `default/themed/hyprland.lua.tpl`; verify `omarchy-theme-set` end to end
-   on 3 themes.
-9. Login: replace `install/login/sddm.sh` with greetd/tuigreet, remove
-   `etc/sddm.conf.d/` and `default/sddm/`, update
-   `install/config/enable-services.sh` (also drop docker.socket).
-10. Hardware pass: add `install/hardware/apple/fix-a1181.sh` (DMI-guarded:
-    isight-firmware-tools with an ift-extract prompt, mbpfan, ath wifi
-    powersave off). Tighten `install/hardware/vulkan.sh` and
-    `install/hardware/intel/sof-firmware.sh` to skip i945 (PCI 8086:27a2).
-11. Storage/FDE: default the documented install to ext4, guard
-    `install/config/snapper.sh` behind a btrfs check, drop
-    `bin/omarchy-hibernation-setup`, retune `bin/omarchy-drive-password`
-    argon2id cost.
-12. Browser: `--disable-gpu` in `config/chromium-flags.conf`, prune the
-    webapp list, document Firefox software WebRender.
-13. Updates: fork repo or override packages; pin/fork `migrations/`; keep
-    the update-guard hook on the fork channel.
-14. Validate the full manual install on the MacBook2,1: boot, unlock,
-    login, sway session, theming, bar/menu/lock shims, wifi, webcam, audio,
-    suspend/resume. Only then consider an IA32-bootable ISO.
+1. DONE 2026-08-30: cloud test bench up (i686 chroot + IA32-UEFI QEMU
+   VM); Lite core installed; sway/pixman validated on i686; fontconfig
+   override built.
+2. Rehearse the full install in the QEMU VM from the archlinux32 ISO:
+   partition, pacstrap, GRUB i386-efi as BOOTIA32.EFI, boot from disk,
+   greetd into sway/pixman. This validates the whole boot chain against
+   32-bit UEFI firmware before touching the Mac.
+3. Package lists: rewrite install/omarchy-base.packages to the Lite core;
+   empty omarchy-other.packages of the Mac-irrelevant firmware sets.
+4. Boot chain in the repo: remove etc/limine-entry-tool.d/ and
+   default/limine/; rewrite bin/omarchy-refresh-limine as
+   omarchy-refresh-grub; trim etc/mkinitcpio.conf.d/omarchy_hooks.conf.
+5. Write config/sway/ replacing config/hypr/ (bindings, rules,
+   workspaces, autostart translated from the Lua configs); rewrite
+   default/wayland-sessions/omarchy.desktop and the uwsm defaults to
+   start sway with WLR_RENDERER=pixman.
+6. Shell shim layer: reimplement bin/omarchy-shell, -bar, -menu, -osd,
+   -notification-*, -system-lock over waybar/fuzzel/mako/swaylock;
+   remove shell/ from the build.
+7. IPC pass: port the 24 bin/omarchy-hyprland-* scripts to swaymsg;
+   route incidental hyprctl calls through omarchy-compositor-ctl; delete
+   the two Hyprland libalpm hooks.
+8. Theme pipeline: add sway.tpl + waybar/mako color templates; verify
+   omarchy-theme-set end to end on 3 themes (testable in the chroot).
+9. Login: replace install/login/sddm.sh with greetd/tuigreet; remove
+   etc/sddm.conf.d/ and default/sddm/; update
+   install/config/enable-services.sh.
+10. Pacman: point default/pacman configs and mirrorlists at archlinux32
+    (Architecture = i686); stand up a small fork repo for the override
+    packages (fontconfig first) and the omarchy-own i686 rebuilds.
+11. Hardware pass: add install/hardware/apple/fix-a1181.sh; guard
+    vulkan.sh and sof-firmware.sh against i945.
+12. Storage/FDE: ext4 defaults, guard snapper.sh, drop
+    hibernation-setup, retune omarchy-drive-password.
+13. Repeat the full VM rehearsal (step 2) with the forked installer end
+    to end.
+14. On-hardware spike on the MacBook1,1: boot the archlinux32 ISO, test
+    sway GLES2 vs pixman at 1280x800 on the real GMA 950, then run the
+    validated install. i3/X11 with the modesetting driver is the
+    fallback if the Wayland floor disappoints.
 
 ## Key sources
 
@@ -218,9 +164,7 @@ hardware video decode, no Vulkan.
   hypr.land/news/update50, hyprwm/Hyprland#10408
 - wlroots pixman renderer: swaywm/wlroots#2661; screencast limitation:
   emersion/xdg-desktop-portal-wlr#289
-- Mesa gen3 status: docs.mesa3d.org/amber.html; Arch mesa file list
-  (i915_dri.so present in 1:26.2.1-1)
-- Arch x86_64 baseline still v1: Arch RFC 0002 (v3 is a proposed
-  additional port, not a baseline raise)
-- GRUB i386-efi booting 64-bit Arch on a real MacBook2,1: Arch wiki
-  MacBook page and tinkerdifferent.com build thread
+- archlinux32 mirrors: mirror.archlinux32.org (i686 and pentium4 trees)
+- GRUB i386-efi on 32-bit Apple EFI: Arch wiki MacBook page
+- Test-bench validation logs: this repo's runbooks and the omarchy32-test
+  server (see docs/runbooks/testbench.md)
