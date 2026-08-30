@@ -1,4 +1,7 @@
-systemctl enable bluetooth.service
+# Skip cleanly when bluez is not installed (minimal builds).
+if [[ -f /usr/lib/systemd/system/bluetooth.service ]]; then
+  systemctl enable bluetooth.service
+fi
 
 # AutoEnable stays at its stock default on purpose. It was set to false here to
 # persist the power state, which it never did: BlueZ has no such behaviour, so

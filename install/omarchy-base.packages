@@ -3,6 +3,8 @@
 
 base
 bat
+bluez
+bluez-utils
 brightnessctl
 btop
 efibootmgr
@@ -24,16 +26,19 @@ neovim
 networkmanager
 pipewire
 pipewire-pulse
+plocate
 polkit
 ripgrep
 seatd
 slurp
 starship
+sudo
 sway
 swaybg
 swayidle
 swaylock
 tmux
+ufw
 waybar
 wireplumber
 wl-clipboard
