@@ -1,10 +1,8 @@
-[colors-dark]
+[colors]
 foreground={{ foreground_strip }}
 background={{ background_strip }}
 selection-foreground={{ selection_foreground_strip }}
 selection-background={{ selection_background_strip }}
-
-cursor={{ background_strip }} {{ bright_foreground_strip }}
 
 regular0={{ background_strip }}
 regular1={{ red_strip }}
@@ -23,3 +21,6 @@ bright4={{ bright_blue_strip }}
 bright5={{ bright_magenta_strip }}
 bright6={{ bright_cyan_strip }}
 bright7={{ bright_foreground_strip }}
+
+[cursor]
+color={{ background_strip }} {{ bright_foreground_strip }}

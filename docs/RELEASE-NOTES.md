@@ -37,7 +37,15 @@ The full Omarchy workflow with every pixel drawn by the CPU:
   live-tested against a running sway session on i686
 - Theme pipeline renders sway/waybar/mako/swaylock for 3 themes with
   zero unreplaced tokens; rendered sway files validate
-- `test/cli`: 116/116 pass
+- `test/cli`: 116/116 pass; `test/shell`: 155/155 test files pass
+  after the triage (39 Quickshell/Hyprland-era tests removed, 46
+  ported to the sway/waybar stack)
+- Full in-VM desktop battery: sway + waybar + mako + swayidle + swaybg
+  all running under greetd autologin with the pixman renderer and the
+  systemd user bus; live theme switching re-renders and reloads
+  sway/waybar/mako/swaylock; windows spawn and are driven via
+  `omarchy-compositor-ctl`; notifications deliver from any shell;
+  zero failed systemd units
 
 ## Fixed during validation (would have broken a real install)
 
@@ -60,6 +68,42 @@ The full Omarchy workflow with every pixel drawn by the CPU:
    FcConfigSetDefaultSubstitute`. Fixed by a self-built fontconfig
    2:2.18.3 i686 package (docs disabled, meson >= 1.11 from pip). This
    override is currently installed BY HAND - see "Missing" below.
+7. waybar links `libxml2.so.2` but the repo's libxml2 is 2.15 (soname
+   .16); waybar dies at startup. Fixed by shipping `libxml2-legacy`
+   (the second dependency-drift bug of this class; expect more).
+8. A whole tier of runtime dependencies was missing from the package
+   set and surfaced only when the desktop actually ran: `jq` (62
+   scripts), `gum` (39), `xdg-user-dirs`, `xdg-utils`, `wtype` (emoji
+   and paste injection), `psmisc` (killall in restart scripts),
+   `libpulse` (the media-key volume scripts call pactl), `upower`
+   (battery status), `qrencode` (wifi QR menu). All added; the core is
+   now 54 packages.
+9. The greetd session wrapped sway in `dbus-run-session`, whose
+   private bus split notifications and systemd user units onto
+   different buses (notifications from any non-session shell failed).
+   greetd now launches `omarchy-sway-launch` for both sessions; the
+   wrapper pins the systemd user bus and sets OMARCHY_PATH, PATH and
+   the pixman renderer for all session children.
+10. 28 scripts launch apps via `uwsm-app`, but the port dropped the
+   uwsm session manager. A new `uwsm-app` shim (detached exec) keeps
+   them all working.
+11. `omarchy-refresh-grub` ran grub-mkconfig before grub-install, but
+   only grub-install creates /boot/grub on a first run; the first boot
+   landed on a bare grub prompt. Order swapped.
+12. `omarchy-compositor-ctl` and `omarchy-capture-color` were committed
+   without the executable bit.
+13. The sway config's theme include glob (`theme/sway*`) also matched
+   the rendered `swaylock.args`, so sway parsed swaylock flags as
+   config and flagged errors on every theme switch. The rendered file
+   is now `sway-colors` with a matching include glob.
+14. foot 1.13 (the archlinux32 version) rejects the `[colors-dark]`
+   section and `cursor=` inside `[colors]` that the foot template
+   rendered; template moved to `[colors]` plus a `[cursor]` section.
+15. The test triage across test/shell.d caught 7 more code
+   regressions, fixed in commit b6659167 (focus-app matching,
+   unported launch-shell/restart-shell, monitor-watch recovery,
+   toggle-input-device state, two portable-awk bugs, an omarchy-menu
+   field-separator bug that silently dropped menu guards).
 
 ## Missing / open items
 
@@ -99,9 +143,29 @@ The full Omarchy workflow with every pixel drawn by the CPU:
 - **Storage/FDE polish** (worklist 11): `omarchy-hibernation-setup`
   (btrfs swapfile) should be dropped; `omarchy-drive-password` argon2id
   cost is not yet retuned for a 2 GB Core Duo.
-- **Test suite**: test/cli fully passes; the Quickshell/Hyprland-era
-  test/shell.d suite is being triaged (obsolete tests pruned, portable
-  ones rewritten, regressions fixed).
+- **Screen recording is currently broken**: `omarchy-capture-screenrecording`
+  still targets gpu-screen-recorder (not shipped, and it has no
+  encoder on this GPU anyway). The planned wf-recorder (CPU x264) swap
+  has not happened yet.
+- **Optional capture/transcode tools are not preinstalled**:
+  `omarchy-capture-qr` needs zbar, `omarchy-capture-text` needs
+  tesseract, `omarchy-transcode*` needs ffmpeg/imagemagick. The
+  scripts error until the user installs them; consider guards or menu
+  pruning later.
+- **/etc/skel seeding**: upstream's omarchy package (omarchy-pkgs
+  repo) populates /etc/skel and /usr/share/omarchy; the fork has no
+  package yet, so a manual install copies `config/` into the user's
+  ~/.config and runs `omarchy-provision-user --first-install` by hand
+  (see the runbook).
+- **greetd `initial_session` runs once per boot** (greetd semantics):
+  a `systemctl restart greetd` lands on the tuigreet greeter, not
+  back in the autologin session. Reboot, or log in via tuigreet.
+- Leftover configs for unshipped apps (kitty, ghostty, alacritty,
+  obsidian, chromium, hyprland-preview-share-picker) still sit in
+  `config/`; harmless, prune later.
+- Vestigial bins with no callers remain (omarchy-shell-config, the
+  omarchy-plugin-* set, omarchy-install/remove-preinstalls which would
+  try to install packages absent from archlinux32).
 
 ### Permanently absent on this stack (not bugs)
 

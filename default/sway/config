@@ -402,8 +402,8 @@ exec sleep 2 && omarchy-hook post-boot
 include /etc/sway/config.d/*
 
 # Current theme colors (optional; the glob means a theme without a sway file
-# is fine). The theme pipeline renders this file as .../current/theme/sway.
-include ~/.local/state/omarchy/current/theme/sway*
+# is fine). The theme pipeline renders this file as .../current/theme/sway-colors.
+include ~/.local/state/omarchy/current/theme/sway-colors*
 
 # User drop-ins.
 include ~/.config/sway/config.d/*

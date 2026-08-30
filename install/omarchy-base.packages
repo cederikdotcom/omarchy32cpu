@@ -21,6 +21,7 @@ grim
 grub
 gum
 jq
+libpulse
 libxml2-legacy
 linux
 linux-firmware
@@ -31,6 +32,8 @@ pipewire
 pipewire-pulse
 plocate
 polkit
+psmisc
+qrencode
 ripgrep
 seatd
 slurp
@@ -42,10 +45,12 @@ swayidle
 swaylock
 tmux
 ufw
+upower
 waybar
 wireplumber
 wl-clipboard
 wlsunset
+wtype
 xdg-desktop-portal-wlr
 xdg-user-dirs
 xdg-utils

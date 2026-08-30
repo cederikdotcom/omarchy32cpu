@@ -31,7 +31,7 @@ OMARCHY_THEMES_PATH="$OMARCHY_PATH/themes"
 # code, means adding it here. test/shell.d/theme-staging-test.sh fails on a
 # generated theme file that is neither denied here nor recorded there as
 # colour-only.
-INSTALLED_THEME_DENIED=(alacritty.toml foot.ini ghostty.conf kitty.conf mako.ini sway swaylock.args vscode.json)
+INSTALLED_THEME_DENIED=(alacritty.toml foot.ini ghostty.conf kitty.conf mako.ini sway-colors swaylock.args vscode.json)
 IGNORED_THEME_FILES=()
 
 run_parallel() {

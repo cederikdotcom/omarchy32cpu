@@ -3,7 +3,6 @@
 
 base-devel
 gst-plugin-pipewire
-libpulse
 pipewire-alsa
 pipewire-jack
 wireless-regdb

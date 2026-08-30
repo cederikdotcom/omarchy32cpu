@@ -59,10 +59,21 @@ Rehearsal lessons now baked into the steps below:
      /boot/System/Library/CoreServices/boot.efi` on a blessed HFS+
      helper partition.
    - `grub-mkconfig -o /boot/grub/grub.cfg`
-6. Run the fork's install-script path (`bin/omarchy-apply-system`
-   sequence) for configs, theming, greetd and the hardware pass.
-7. Reboot. greetd/tuigreet (or autologin) starts the sway session with
-   `WLR_RENDERER=pixman`.
+6. Put the repo at /usr/share/omarchy, create the user, then run
+   `omarchy-apply-system --install-user <user> --first-install` in the
+   chroot (validated end to end: config, hardware, greetd login,
+   post-install).
+7. User stage (upstream's omarchy package seeds /etc/skel; the fork
+   has no package yet, so do it by hand): as the user,
+   `cp -r /usr/share/omarchy/config/* ~/.config/`, then
+   `omarchy-provision-user --first-install --force` with
+   OMARCHY_PATH=/usr/share/omarchy and the fork's bin on PATH.
+8. Bootloader: `omarchy-refresh-grub` in the chroot (installs
+   BOOTIA32.EFI on first run, then writes grub.cfg).
+9. Reboot. greetd starts `/usr/share/omarchy/bin/omarchy-sway-launch`
+   (autologin into sway with the pixman renderer). Note ufw comes up
+   enforcing deny-incoming; `ufw allow` for anything you need (rules
+   cannot be added from inside a chroot).
 
 ## Common operations
 
