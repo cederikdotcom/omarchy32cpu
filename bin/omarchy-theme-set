@@ -284,6 +284,14 @@ if [[ ! -f $NEXT_THEME_PATH/colors.toml && -f $NEXT_THEME_PATH/alacritty.toml ]]
   omarchy-theme-colors-from-alacritty "$NEXT_THEME_PATH"
 fi
 
+# Never swap in a hollow staging: an interrupted or out-of-space copy leaves
+# empty files behind, and installing them yields a black, colorless session.
+if [[ ! -s $NEXT_THEME_PATH/colors.toml ]]; then
+  echo "Theme staging failed: colors.toml is missing or empty; keeping the current theme" >&2
+  rm -rf "$NEXT_THEME_PATH"
+  exit 1
+fi
+
 # Generate dynamic configs
 omarchy-theme-set-templates
 
