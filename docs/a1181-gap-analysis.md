@@ -144,6 +144,21 @@ and `install/hardware/apple/fix-a1181.sh`.
    is proven; only the GMA 950 remains. Findings folded into the
    install runbook (Architecture=i686 in pacman.conf, mirrorlist,
    vconsole.conf before mkinitcpio, MODULES for the initramfs).
+3-9. DONE 2026-08-30 (commit 960896d6): the full repo port. Packages,
+   boot chain (omarchy-refresh-grub), sway configs (validated with
+   sway 1.8 -C on i686), shell shims over waybar/fuzzel/mako/swaylock,
+   all hyprctl callers ported to swaymsg (live-tested against sway in
+   the chroot), theme templates (3 themes rendered and validated),
+   greetd login, archlinux32 pacman configs, i945 guards and
+   fix-a1181.sh. test/cli passes 116/116. Remaining from the original
+   steps, now the open list:
+   - Test suite triage: prune Quickshell/Hyprland-era shell.d tests,
+     port the rest (in progress).
+   - Provisioning flows (omarchy-provision-owner, factory-reset) still
+     reference sddm/limine; rework when provisioning matters.
+   - Migrations are upstream's (pinned by fork divergence); write fork
+     migrations from here on.
+   The original step texts follow for reference.
 3. Package lists: rewrite install/omarchy-base.packages to the Lite core;
    empty omarchy-other.packages of the Mac-irrelevant firmware sets.
 4. Boot chain in the repo: remove etc/limine-entry-tool.d/ and
