@@ -42,13 +42,17 @@ development. Created 2026-08-30. Delete it when the port ships.
 - Console: serial on stdio, VNC on 127.0.0.1:5900 (tunnel with
   `ssh -L 5900:127.0.0.1:5900 root@2.28.72.117`), QEMU monitor on
   `/opt/omarchy32/qemu-mon.sock`.
-- Browser view (any device, phone included): http://2.28.72.117:6080/vnc.html
-  password `omarchy32view`. noVNC + websockify on the bench proxying
-  the QEMU framebuffer (`omarchy-novnc` transient systemd unit; QEMU
-  must run with `-vnc 127.0.0.1:0,password=on`). After a QEMU
-  relaunch, run `/opt/omarchy32/start-novnc.sh` to re-set the VNC
-  password and ensure the proxy. The in-OS path for real hardware is
-  `omarchy-remote-view` (wayvnc, port 5901, SSH tunnel).
+- Browser view (any device, phone included):
+  **https://omarchy32.cederik.com/vnc.html** password `omarchy32view`.
+  Caddy terminates TLS (automatic Let's Encrypt; DNS A record
+  omarchy32.cederik.com in the cederik.com Hetzner zone) and proxies
+  to a localhost-only websockify/noVNC (`omarchy-novnc` transient
+  systemd unit) in front of the QEMU framebuffer VNC (QEMU must run
+  with `-vnc 127.0.0.1:0,password=on`). After a QEMU relaunch, run
+  `/opt/omarchy32/start-novnc.sh` to re-set the VNC password and
+  ensure the proxy. Teardown: delete the DNS record with the bench.
+  The in-OS path for real hardware is `omarchy-remote-view` (wayvnc,
+  port 5901, SSH tunnel).
 - Purpose: rehearse the full install including GRUB i386-efi as
   `BOOTIA32.EFI` against real 32-bit UEFI firmware before touching the
   Mac. DONE 2026-08-30: boots to sway on the display.
