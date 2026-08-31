@@ -98,7 +98,17 @@ You need an Arch install medium and the standard Arch install knowledge. This is
    # cederikdotcom/aquamarine branch cpu-backend      (base v0.15.0)
    ```
 
-   Build aquamarine first, then Hyprland against it, and install both into the target. On x86_64 the hypr* dependencies (`hyprutils`, `hyprlang`, `hyprcursor`, `hyprgraphics`, `hyprwayland-scanner`) come from official Arch at the versions Hyprland 0.56 wants, so only those two projects have to be built. A stock `pacman -S hyprland` will install and then fail on the missing GLES 3.0; it is not a substitute. Until a fork package repo exists this step is manual.
+   First install the hypr* libraries the fork binaries link. On x86_64 official Arch carries all of them at the versions Hyprland 0.56 wants, so they are the one part of the compositor you do not have to build:
+
+   ```bash
+   arch-chroot /mnt pacman -S --needed hyprutils hyprlang hyprcursor hyprgraphics hyprwire
+   ```
+
+   They are deliberately absent from `install/omarchy-base.packages`, which has to name only packages that exist on both arches, and archlinux32 has these either missing or far too old. `hyprwayland-scanner` is a build-time dependency and belongs in the build environment, not the target.
+
+   Then build aquamarine, then Hyprland against it, and install both into the target. A stock `pacman -S hyprland` will install and then fail on the missing GLES 3.0; it is not a substitute. Until a fork package repo exists this step is manual.
+
+   The Hyprland build installs its own `hyprland.desktop` and `hyprland-uwsm.desktop` into `/usr/local/share/wayland-sessions/`. Neither sets `HYPRLAND_RENDERER=pixman`, so picking either one in the greeter gives you a black screen on a machine with no GPU. The installer puts the working entry at `/usr/share/wayland-sessions/omarchy.desktop`; delete upstream's two if you do not want them offered.
 
 10. Reboot. greetd starts `/usr/share/omarchy/bin/omarchy-hyprland-launch`, which sets `HYPRLAND_RENDERER=pixman` and `AQ_FORCE_ALLOCATOR=dumb` and autologs `<user>` into Hyprland.
 

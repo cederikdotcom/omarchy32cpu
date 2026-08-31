@@ -111,7 +111,8 @@ default/**                     ──►  omarchy-settings    /usr/share/omarchy
   ├─ fonts/omarchy/omarchy.ttf                          /usr/share/fonts/omarchy/
   ├─ sddm/omarchy/                                      /usr/share/sddm/themes/omarchy/
   ├─ sddm/hyprland.lua                                  /usr/share/sddm/hyprland.lua
-  ├─ wayland-sessions/omarchy.desktop                   /usr/local/share/wayland-sessions/
+  ├─ wayland-sessions/omarchy.desktop                   /usr/share/wayland-sessions/
+                                                          (install/login/wayland-session.sh)
   ├─ plymouth/                                          /usr/share/plymouth/themes/omarchy/
   └─ security/faillock, nsswitch, cups-browsed,
      plymouthd.conf, os-release                         /usr/share/omarchy/etc-overrides/
