@@ -2,24 +2,38 @@
 
 source "$(dirname "$0")/base-test.sh"
 
-# Hyprland's tiled-fullscreen (client fullscreen while the window stays tiled)
-# has no sway equivalent; the toggle degrades to a plain fullscreen toggle
-# through the compositor-neutral helper.
-
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 
-cat >"$tmpdir/swaymsg" <<'BASH'
+cat >"$tmpdir/hyprctl" <<'BASH'
 #!/bin/bash
 
-printf '%s\n' "$*" >>"$SWAYMSG_LOG"
-BASH
-chmod +x "$tmpdir/swaymsg"
+if [[ $1 == "activewindow" && $2 == "-j" ]]; then
+  printf '{"fullscreenClient":%s}\n' "${HYPR_FULLSCREEN_CLIENT:-0}"
+  exit 0
+fi
 
-log="$tmpdir/swaymsg.log"
-PATH="$tmpdir:$ROOT/bin:$PATH" SWAYMSG_LOG="$log" \
+if [[ $1 == "dispatch" ]]; then
+  printf '%s\n' "$*" >>"$HYPRCTL_LOG"
+  exit 0
+fi
+
+exit 1
+BASH
+chmod +x "$tmpdir/hyprctl"
+
+log="$tmpdir/hyprctl.log"
+PATH="$tmpdir:$PATH" HYPRCTL_LOG="$log" HYPR_FULLSCREEN_CLIENT=0 \
   "$ROOT/bin/omarchy-hyprland-window-tiled-fullscreen-toggle"
 
-grep -Fqx 'fullscreen toggle' "$log" || \
-  fail "tiled fullscreen toggles sway fullscreen on the focused window"
-pass "tiled fullscreen toggles sway fullscreen on the focused window"
+grep -Fq 'hl.dsp.window.fullscreen_state({ internal = 0, client = 2 })' "$log" || \
+  fail "tiled fullscreen enables client fullscreen"
+pass "tiled fullscreen enables client fullscreen"
+
+>"$log"
+PATH="$tmpdir:$PATH" HYPRCTL_LOG="$log" HYPR_FULLSCREEN_CLIENT=2 \
+  "$ROOT/bin/omarchy-hyprland-window-tiled-fullscreen-toggle"
+
+grep -Fq 'hl.dsp.window.fullscreen_state({ internal = 0, client = 0 })' "$log" || \
+  fail "tiled fullscreen disables client fullscreen"
+pass "tiled fullscreen disables client fullscreen"

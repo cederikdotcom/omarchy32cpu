@@ -2,121 +2,189 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/base-test.sh"
 
-require_command python3
+require_command lua
 
-# The default bindings now live in default/sway/config as plain bindsym /
-# bindcode lines. Print one normalized line per binding: signature, chord as
-# written, action. The signature expands $mod, sorts modifiers, and resolves
-# bindcode numbers to the keysym they produce, so "bindcode $mod+10" and
-# "bindsym $mod+1" collide the way they do on a real keyboard. Mode blocks
-# (e.g. the resize mode) are separate binding contexts and get a prefix.
+# Load every default binding and print one normalized line per bind:
+# signature, keys as written, description. The signature sorts modifiers and
+# resolves code:N to the keysym it produces, so "SUPER + code:10" and
+# "SUPER + 1" collide the way they do on a real keyboard.
 list_bindings() {
-  python3 - "$1" <<'PY'
-import re
-import sys
+  local home="$1"
+  local epilogue="${2:-}"
 
-# X11 keycodes are evdev codes plus 8. Only the rows Omarchy binds by code
-# need naming; anything else keeps its code: form and still compares exactly.
-keycode_keysyms = {
-    "10": "1", "11": "2", "12": "3", "13": "4", "14": "5",
-    "15": "6", "16": "7", "17": "8", "18": "9", "19": "0",
-    "20": "MINUS", "21": "EQUAL",
-    "34": "BRACKETLEFT", "35": "BRACKETRIGHT",
-    "47": "SEMICOLON", "48": "APOSTROPHE", "49": "GRAVE", "51": "BACKSLASH",
-    "59": "COMMA", "60": "PERIOD", "61": "SLASH",
+  HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_STATE_HOME="$home/.local/state" OMARCHY_PATH="$ROOT" OMARCHY_BINDING_EPILOGUE="$epilogue" lua <<'LUA'
+package.path = os.getenv("HOME") .. "/.config/?.lua;" .. os.getenv("OMARCHY_PATH") .. "/?.lua;" .. package.path
+
+local function proxy()
+  return setmetatable({}, {
+    __index = function(self, key)
+      local value = proxy()
+      rawset(self, key, value)
+      return value
+    end,
+    __call = function()
+      return {}
+    end,
+  })
+end
+
+local bindings = {}
+
+hl = setmetatable({
+  dsp = proxy(),
+  bind = function(keys, dispatcher, opts)
+    opts = opts or {}
+    table.insert(bindings, {
+      keys = keys,
+      description = opts.description or "(no description)",
+      release = opts.release == true,
+    })
+  end,
+  config = function() end,
+  env = function() end,
+  monitor = function() end,
+  window_rule = function() end,
+  workspace_rule = function() end,
+  layer_rule = function() end,
+  gesture = function() end,
+  animation = function() end,
+  curve = function() end,
+  exec_cmd = function() end,
+  dispatch = function() end,
+  on = function() end,
+  timer = function() end,
+  get_config = function() return nil end,
+  get_active_window = function() return nil end,
+}, {
+  __index = function()
+    return function()
+      return {}
+    end
+  end,
+})
+
+require("default.hypr.omarchy")
+
+local epilogue = os.getenv("OMARCHY_BINDING_EPILOGUE") or ""
+if epilogue ~= "" then
+  assert(load(epilogue))()
+end
+
+-- X11 keycodes are evdev codes plus 8. Only the rows Omarchy binds by code
+-- need naming; anything else keeps its code: form and still compares exactly.
+local keycode_keysyms = {
+  [10] = "1", [11] = "2", [12] = "3", [13] = "4", [14] = "5",
+  [15] = "6", [16] = "7", [17] = "8", [18] = "9", [19] = "0",
+  [20] = "MINUS", [21] = "EQUAL",
+  [34] = "BRACKETLEFT", [35] = "BRACKETRIGHT",
+  [47] = "SEMICOLON", [48] = "APOSTROPHE", [49] = "GRAVE", [51] = "BACKSLASH",
+  [59] = "COMMA", [60] = "PERIOD", [61] = "SLASH",
 }
 
-mod = "MOD4"
-mode = ""
-for raw in open(sys.argv[1]):
-    line = raw.strip()
-    m = re.match(r'^set\s+\$mod\s+(\S+)$', line)
-    if m:
-        mod = m.group(1).upper()
-        continue
-    m = re.match(r'^mode\s+"([^"]+)"', line)
-    if m:
-        mode = m.group(1)
-        continue
-    if line == "}":
-        mode = ""
-        continue
-    m = re.match(r'^(bindsym|bindcode)\s+(.*)$', line)
-    if not m:
-        continue
-    kind, rest = m.groups()
-    tokens = rest.split()
-    release = False
-    while tokens and tokens[0].startswith("--"):
-        if tokens[0] == "--release":
-            release = True
-        tokens.pop(0)
-    if not tokens:
-        continue
-    chord = tokens[0]
-    action = " ".join(tokens[1:])
-    parts = [p for p in chord.split("+") if p]
-    parts = [mod if p == "$mod" else p.upper() for p in parts]
-    key = parts.pop()
-    if kind == "bindcode":
-        key = keycode_keysyms.get(key, "CODE:" + key)
-    signature = "+".join(sorted(parts) + [key])
-    if mode:
-        signature = mode + ":" + signature
-    if release:
-        signature += " (release)"
-    print("\t".join([signature, chord, action]))
-PY
+local function signature(binding)
+  local parts = {}
+  for raw in (binding.keys .. "+"):gmatch("([^+]*)%+") do
+    local part = raw:match("^%s*(.-)%s*$")
+    if part ~= "" then
+      table.insert(parts, part)
+    end
+  end
+
+  local key = table.remove(parts) or ""
+  local code = tonumber(key:match("^[Cc][Oo][Dd][Ee]:(%d+)$") or "")
+  if code and keycode_keysyms[code] then
+    key = keycode_keysyms[code]
+  end
+
+  for index, modifier in ipairs(parts) do
+    parts[index] = modifier:upper()
+  end
+  table.sort(parts)
+  table.insert(parts, key:upper())
+
+  return table.concat(parts, "+") .. (binding.release and " (release)" or "")
+end
+
+for _, binding in ipairs(bindings) do
+  print(signature(binding) .. "\t" .. binding.keys .. "\t" .. binding.description)
+end
+LUA
 }
 
 duplicate_signatures() {
   cut -f1 | sort | uniq -d
 }
 
-sway_config="$ROOT/default/sway/config"
+# Deliberate stacking: Hyprland runs both dispatchers, so cycling to the next
+# window also raises it. Anything else sharing a chord is a collision.
+allowed_duplicates=(
+  "ALT+SHIFT+TAB"
+  "ALT+TAB"
+)
 
-bindings=$(list_bindings "$sway_config")
+is_allowed_duplicate() {
+  local signature="$1" allowed
+
+  for allowed in "${allowed_duplicates[@]}"; do
+    [[ $signature == "$allowed" ]] && return 0
+  done
+
+  return 1
+}
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+# A fresh home keeps the preinstalled app bindings on, and a stub Voxtype adds
+# its conditional ones, so the check covers the largest set a user can get.
+home="$tmpdir/home"
+stub_bin="$tmpdir/bin"
+mkdir -p "$home" "$stub_bin"
+touch "$stub_bin/voxtype"
+chmod +x "$stub_bin/voxtype"
+
+bindings=$(PATH="$stub_bin:$PATH" list_bindings "$home")
 [[ -n $bindings ]] || fail "default bindings load for the conflict check"
 
-grep -Fq $'MOD4+RETURN\t$mod+Return\texec omarchy-launch-terminal' <<<"$bindings" ||
-  fail "conflict check sees the essential bindings"
-pass "conflict check covers the default binding set"
+grep -Fq $'SUPER + RETURN\tTerminal' <<<"$bindings" || fail "conflict check sees the essential bindings"
+grep -Fq $'SUPER + SHIFT + A\tChatGPT' <<<"$bindings" || fail "conflict check sees the preinstalled bindings"
+grep -Fq $'F9\tStart dictation (push-to-talk)' <<<"$bindings" || fail "conflict check sees the Voxtype bindings"
+pass "conflict check covers the full default binding set"
 
 duplicates=$(duplicate_signatures <<<"$bindings")
 
 while read -r signature; do
   [[ -n $signature ]] || continue
+  is_allowed_duplicate "$signature" && continue
   fail "no two default bindings claim the same chord" \
     "$(awk -F'\t' -v signature="$signature" '$1 == signature { print $2 " -> " $3 }' <<<"$bindings")"
 done <<<"$duplicates"
 pass "no two default bindings claim the same chord"
 
-# Guard the guard: the checker has to catch an injected collision, or the
-# check above passes by simply not looking.
-tmpdir=$(mktemp -d)
-trap 'rm -rf "$tmpdir"' EXIT
+for allowed in "${allowed_duplicates[@]}"; do
+  grep -Fqx "$allowed" <<<"$duplicates" ||
+    fail "every allowed duplicate chord is still stacked on purpose" "$allowed"
+done
+pass "allowed duplicate chords are still stacked on purpose"
 
-probe_config="$tmpdir/config"
+# The press and release halves of a push-to-talk key are separate binds, not a
+# collision.
+(( $(grep -c $'^F9\t' <<<"$bindings") == 1 )) ||
+  fail "press and release bindings on one key do not read as a conflict"
+(( $(grep -c $'^F9 (release)\t' <<<"$bindings") == 1 )) ||
+  fail "release bindings keep their own signature"
+pass "press and release bindings on one key do not read as a conflict"
 
-cp "$sway_config" "$probe_config"
-printf 'bindcode $mod+10 exec conflict-probe\n' >>"$probe_config"
-probe=$(list_bindings "$probe_config" | duplicate_signatures)
-grep -Fqx 'MOD4+1' <<<"$probe" ||
-  fail "the conflict check catches a keycode colliding with a bound keysym"
+# Guard the guard: a keysym that lands on an already bound keycode has to be
+# caught, or the check above passes by simply not looking.
+probe=$(PATH="$stub_bin:$PATH" list_bindings "$home" \
+  'o.bind("SUPER + 1", "Conflict probe", "true")' | duplicate_signatures)
+grep -Fqx "SUPER+1" <<<"$probe" ||
+  fail "the conflict check catches a keysym colliding with a bound keycode"
 
-# Modifier order is cosmetic; sway binds the same chord either way.
-cp "$sway_config" "$probe_config"
-printf 'bindsym $mod+Alt+Shift+Right exec conflict-probe\n' >>"$probe_config"
-probe=$(list_bindings "$probe_config" | duplicate_signatures)
-grep -Fqx 'ALT+MOD4+SHIFT+RIGHT' <<<"$probe" ||
+# Modifier order is cosmetic; Hyprland binds the same chord either way.
+probe=$(PATH="$stub_bin:$PATH" list_bindings "$home" \
+  'o.bind("SUPER + ALT + SHIFT + RIGHT", "Conflict probe", "true")' | duplicate_signatures)
+grep -Fqx "ALT+SHIFT+SUPER+RIGHT" <<<"$probe" ||
   fail "the conflict check ignores modifier order"
 pass "the conflict check catches collisions across keycodes and modifier order"
-
-# A mode block is its own binding context, not a collision with the default
-# context.
-cp "$sway_config" "$probe_config"
-printf 'mode "probe" {\n  bindsym $mod+Return exec conflict-probe\n}\n' >>"$probe_config"
-probe=$(list_bindings "$probe_config" | duplicate_signatures)
-[[ -z $probe ]] ||
-  fail "mode-local bindings do not read as conflicts with the default context" "$probe"
-pass "mode-local bindings keep their own binding context"
