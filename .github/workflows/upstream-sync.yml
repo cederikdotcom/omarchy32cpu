@@ -85,9 +85,16 @@ jobs:
             echo
             echo "Nothing was merged automatically. This issue updates itself on each run."
           } > /tmp/body.md
-          existing=$(gh issue list --state open --search "upstream sync in:title" --json number -q '.[0].number' || true)
+          # The run summary is the reliable channel: a fork's GITHUB_TOKEN
+          # cannot always open issues. The issue is best-effort on top.
+          echo "## $title" >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/body.md >> "$GITHUB_STEP_SUMMARY"
+          if [ "$CLEAN" = "false" ]; then
+            echo "::warning::$title - upstream no longer merges cleanly, see the job summary"
+          fi
+          existing=$(gh issue list --state open --search "upstream sync in:title" --json number -q '.[0].number' 2>/dev/null || true)
           if [ -n "$existing" ]; then
-            gh issue edit "$existing" --title "$title" --body-file /tmp/body.md
+            gh issue edit "$existing" --title "$title" --body-file /tmp/body.md 2>/dev/null || echo "note: could not update issue #$existing (fork token restriction)"
           else
-            gh issue create --title "$title" --body-file /tmp/body.md
+            gh issue create --title "$title" --body-file /tmp/body.md 2>/dev/null || echo "note: could not open an issue (fork token restriction); the job summary carries the report"
           fi
