@@ -4,32 +4,18 @@
 # omarchy:args=<on|off|toggle|recover>
 
 TOGGLE="internal-monitor-disable"
+TOGGLE_FLAG="$HOME/.local/state/omarchy/toggles/hypr/$TOGGLE.lua"
+MIRROR_TOGGLE="internal-monitor-mirror"
 
 INTERNAL=$(omarchy-hyprland-monitor-laptop)
 
-# The name is interpolated into a swaymsg command string, so only a plain
-# connector name may pass; anything else could smuggle in extra commands.
-require_safe_name() {
-  if [[ ! $INTERNAL =~ ^[A-Za-z0-9._-]+$ ]]; then
-    omarchy-notification-send -g 󰍹 "Refusing unsafe monitor name"
-    exit 1
-  fi
-}
-
 wake() {
-  swaymsg 'output * power on' >/dev/null 2>&1 || true
-}
-
-enable_internal() {
-  [[ -n $INTERNAL ]] || return 0
-  require_safe_name
-  swaymsg "output $INTERNAL enable" >/dev/null 2>&1 || true
+  hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' >/dev/null 2>&1 || true
 }
 
 on() {
   if omarchy-hyprland-toggle-enabled $TOGGLE; then
     omarchy-hyprland-toggle $TOGGLE off
-    enable_internal
     omarchy-notification-send -g 󰍹 "Laptop display enabled"
   fi
 
@@ -42,18 +28,22 @@ off() {
     exit 1
   fi
 
-  require_safe_name
+  # The name is written into generated Lua below, so only a plain connector
+  # name may pass; anything else could execute on the next reload.
+  if [[ ! $INTERNAL =~ ^[A-Za-z0-9._-]+$ ]]; then
+    omarchy-notification-send -g 󰍹 "Refusing unsafe monitor name"
+    exit 1
+  fi
 
   if ! omarchy-hyprland-monitor-external-active; then
     omarchy-notification-send -g 󰍹 "Can't disable the only active display"
     exit 1
   fi
 
-  if omarchy-hyprland-toggle-disabled $TOGGLE; then
-    # The toggle reloads sway first, so the disable below is the last word.
-    omarchy-hyprland-toggle $TOGGLE on
-    swaymsg "output $INTERNAL disable" >/dev/null
+  if omarchy-hyprland-toggle-disabled $TOGGLE && omarchy-hyprland-toggle-disabled $MIRROR_TOGGLE; then
+    printf 'hl.monitor({ output = "%s", disabled = true })\n' "$INTERNAL" >"$TOGGLE_FLAG"
     omarchy-notification-send -g 󰍹 "Laptop display disabled"
+    hyprctl reload
   fi
 }
 
@@ -65,7 +55,6 @@ recover() {
   omarchy-hyprland-toggle-enabled $TOGGLE || return 0
 
   omarchy-hyprland-toggle $TOGGLE off
-  enable_internal
   wake
 }
 
