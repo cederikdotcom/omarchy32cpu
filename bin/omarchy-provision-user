@@ -108,8 +108,21 @@ done
 source "$OMARCHY_INSTALL/user/all.sh"
 
 omarchy-refresh-applications
-env -u BROWSER xdg-settings set default-web-browser chromium.desktop
-xdg-mime default HEY.desktop x-scheme-handler/mailto
+
+# Upstream ships Chromium and HEY and can hard-set them here. This fork ships
+# no applications at all, so claim a default only for handlers that actually
+# exist; xdg-settings exits non-zero on a missing .desktop and would abort the
+# whole user stage under set -e.
+for browser in chromium.desktop firefox.desktop; do
+  if [[ -f "$HOME/.local/share/applications/$browser" || -f /usr/share/applications/$browser ]]; then
+    env -u BROWSER xdg-settings set default-web-browser "$browser"
+    break
+  fi
+done
+
+if [[ -f "$HOME/.local/share/applications/HEY.desktop" ]]; then
+  xdg-mime default HEY.desktop x-scheme-handler/mailto
+fi
 
 if (( first_install )); then
   mkdir -p "$state_dir/migrations"
