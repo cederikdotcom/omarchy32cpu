@@ -254,3 +254,159 @@ Gotchas learned:
 - 2026-08-31 (impl session 1): pixman renderer M0+M1 verified on this bench (headless +
   nested harnesses above). Both forks build clean; Hyprland pixman-renderer @26febe72,
   aquamarine cpu-backend @e088146. Screenshots pulled to ~/hyprdev/pixman-*.png.
+
+---
+
+## i686 chroot (M2, omarchy32cpu target) — VERIFIED 2026-08-31
+
+Second chroot on the SAME bench: `/opt/hypr32/root` (archlinux32 i686, pacstrap with
+`/opt/hypr32/pacman-i686.conf`, Server = https://mirror.archlinux32.org/i686/$repo).
+Enter: `arch-chroot /opt/hypr32/root setarch i686 /bin/bash -lc <cmd>` (uname = i686).
+Build env inside: `source /opt/hyprdev/env.sh` (adds /usr/local to PATH/PKG_CONFIG_PATH).
+pip supplies cmake 4.4.3 + meson 1.12.0 (+jinja2); repo cmake/meson too old.
+
+- Full dep story (source-built versions, the two patch files, chroot quirks:
+  pango .pc floors, libxml2-legacy, ld.so.conf /usr/local/lib, locale-gen):
+  `~/hyprdev/patches32/README.md`.
+- Both forks build CLEAN for i686 after two Hyprland commits (4a2b510e py3.11
+  stubs-gen, 63417a30 no ranges::starts_with); aquamarine needed nothing.
+- Headless proof: `/opt/hyprdev/harness-pixman-headless-32.sh` in the chroot —
+  fork Hyprland + pixman renderer + headless output + foot + grim; verified
+  1920x1080, 2023552 non-black px, "Renderer: pixman (software)" in the runtime
+  log; screenshot pulled to `~/hyprdev/i686-headless.png`.
+- fontconfig 2:2.18.3-2 i686 override rebuilt (makepkg, doc=disabled) →
+  `/opt/hypr32/overrides/fontconfig-2:2.18.3-2-i686.pkg.tar.zst` (also installed
+  in the chroot; pango pkg-config chain needs it).
+- Installable stage tree for the VM phase: `/opt/hypr32/stage` (89M, DESTDIR
+  install of the whole stack: /usr/local/{bin,lib,share} + libinput 1.29 under
+  /usr + etc/ld.so.conf.d/00-usrlocal.conf). Regenerate with
+  `/opt/hyprdev/stage.sh` inside the chroot (writes /opt/stage32, host-mv to
+  /opt/hypr32/stage).
+
+---
+
+## omarchy32cpu VM (M2 target) — BUILT + VERIFIED 2026-08-31
+
+Lives on the SAME bench at `/opt/omarchy32vm/`. Built from scratch (the old
+server `2.28.72.117` was probed once for its existing `disk2.img` and reset the
+connection at the handshake, so do not bother with it again).
+
+Layout:
+- `disk.img` — 20 G raw GPT, 512 M FAT32 ESP at `/boot` + ext4 root (2.9 G used)
+- `omarchy-src/` — the omarchy32cpu fork, copied into the image as
+  `/usr/share/omarchy`
+- `mkimage.sh` / `configure.sh` / `apply.sh` — the three build phases, re-runnable
+- `launch-vm.sh` — the QEMU launcher (below)
+- `OVMF32_VARS.fd` — writable copy of the IA32 firmware vars
+- `serial.log`, `qemu.log`, `qemu-mon.sock` — console, QEMU stderr, monitor
+
+Host packages needed: `qemu-system-x86 ovmf-ia32 dosfstools parted
+arch-install-scripts rsync socat netpbm`.
+
+### Image build (only to rebuild from scratch)
+
+```bash
+ssh root@46.224.193.205 '/opt/omarchy32vm/mkimage.sh'    # image + partitions + pacstrap i686
+ssh root@46.224.193.205 '/opt/omarchy32vm/configure.sh'  # fstab, pacman.conf, fontconfig
+                                                          # override, users, keys, mkinitcpio
+ssh root@46.224.193.205 '/opt/omarchy32vm/apply.sh'      # omarchy-apply-system + GRUB + services
+# then the hypr stack:
+ssh root@46.224.193.205 'rsync -a /opt/hypr32/stage/usr/ /mnt/o32/usr/ && \
+  rsync -a /opt/hypr32/stage/etc/ /mnt/o32/etc/ && arch-chroot /mnt/o32 ldconfig && \
+  arch-chroot /mnt/o32 pacman -Sy --noconfirm muparser re2 tomlplusplus libzip'
+ssh root@46.224.193.205 'umount -R /mnt/o32; losetup -d /dev/loop0'
+```
+The stage tree's four missing runtime libs (`libmuparser.so.2`, `libre2.so.10`,
+`libtomlplusplus.so.3`, `libzip.so.5`) are the ONLY extra packages the stack needs.
+
+Traps that cost time — read before rebuilding:
+- Arch's `pacman.conf` uses TABS around `SigLevel`; a `SigLevel *=` sed misses it
+  and every later `pacman -S` fails with "required key missing from keyring".
+  Match with `[[:space:]]*`.
+- mkinitcpio's `kms` hook drags in every GPU firmware blob (179 MB image, painful
+  under TCG). Use `MODULES=(ahci sd_mod ext4 bochs)` and
+  `HOOKS=(base udev modconf block filesystems fsck)` → 27 MB.
+- `arch-chroot` into the image needs the loop device present for `grub-install`
+  (i386-efi) to probe the ESP; `omarchy-refresh-grub` handles the rest.
+
+### Launch / attach
+
+```bash
+# launch (detached, survives the shell)
+ssh root@46.224.193.205 '/opt/omarchy32vm/launch-vm.sh'
+# essence:
+#   qemu-system-i386 -M q35 -cpu coreduo -smp 2 -m 2048 \
+#     -drive if=pflash,unit=0,readonly=on,file=/usr/share/OVMF/OVMF32_CODE_4M.fd \
+#     -drive if=pflash,unit=1,file=/opt/omarchy32vm/OVMF32_VARS.fd \
+#     -drive id=hd0,if=none,format=raw,file=/opt/omarchy32vm/disk.img \
+#     -device ich9-ahci,id=ahci -device ide-hd,drive=hd0,bus=ahci.0 \
+#     -nic user,model=e1000,hostfwd=tcp:127.0.0.1:2222-:22 \
+#     -vnc 127.0.0.1:0 -monitor unix:/opt/omarchy32vm/qemu-mon.sock,server,nowait \
+#     -serial file:/opt/omarchy32vm/serial.log -display none
+
+# boot progress (login prompt ≈ 90 s under TCG)
+ssh root@46.224.193.205 'tail -f /opt/omarchy32vm/serial.log'
+
+# ssh INTO the VM from this machine (ProxyJump through the bench)
+VMSSH="ssh -o ProxyJump=root@46.224.193.205 -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+$VMSSH root@127.0.0.1        # or cederik@127.0.0.1; password omarchy, keys installed
+
+# screenshot the VM's REAL display
+ssh root@46.224.193.205 'echo "screendump /opt/omarchy32vm/shot.ppm" | \
+  socat - unix-connect:/opt/omarchy32vm/qemu-mon.sock; sleep 2; \
+  pnmtopng /opt/omarchy32vm/shot.ppm > /opt/omarchy32vm/shot.png'
+scp root@46.224.193.205:/opt/omarchy32vm/shot.png ~/hyprdev/shot.png
+
+# stop it
+ssh root@46.224.193.205 'pkill -f "qemu-system-[i]386"'
+```
+
+### Run the pixman Hyprland on the VM's DRM display
+
+`/usr/local/bin/vm-pixman` in the image is a root wrapper that prepares the
+runtime dir and drops to `cederik`:
+```bash
+$VMSSH root@127.0.0.1 'systemctl stop greetd'   # release DRM master + the VT
+$VMSSH root@127.0.0.1 'pkill -f "[H]yprland"; /usr/local/bin/vm-pixman'
+# wrapper essence (cwd MUST be /home/cederik, see below):
+#   cd /home/cederik
+#   install -d -m 700 -o cederik -g cederik /run/user/1000
+#   setpriv --reuid=cederik --regid=cederik --init-groups env \
+#     HOME=/home/cederik XDG_RUNTIME_DIR=/run/user/1000 LIBSEAT_BACKEND=seatd \
+#     HYPRLAND_RENDERER=pixman AQ_FORCE_ALLOCATOR=dumb AQ_DRM_DEVICES=/dev/dri/card0 \
+#     /usr/local/bin/Hyprland --config /home/cederik/hyprland-flat.conf
+
+# talk to it
+$VMSSH root@127.0.0.1 'SIG=$(ls -t /run/user/1000/hypr | head -1); \
+  setpriv --reuid=cederik --regid=cederik --init-groups env HOME=/home/cederik \
+    XDG_RUNTIME_DIR=/run/user/1000 HYPRLAND_INSTANCE_SIGNATURE=$SIG \
+    PATH=/usr/local/bin:/usr/bin hyprctl dispatch exec foot'
+```
+
+### Reinstall a rebuilt component into a RUNNING VM
+
+```bash
+ssh root@46.224.193.205 'arch-chroot /opt/hypr32/root setarch i686 /bin/bash -lc \
+  "source /opt/hyprdev/env.sh; ninja -C /opt/hyprdev/src/aquamarine/build -j8 && \
+   ninja -C /opt/hyprdev/src/aquamarine/build install"'
+ssh root@46.224.193.205 'scp -P 2222 -o StrictHostKeyChecking=no \
+  /opt/hypr32/root/usr/local/lib/libaquamarine.so.0.15.0 \
+  root@127.0.0.1:/usr/local/lib/libaquamarine.so.0.15.0'
+$VMSSH root@127.0.0.1 'ldconfig; pkill -f "[H]yprland"; /usr/local/bin/vm-pixman'
+```
+
+### VM gotchas
+
+- **`pkill -f <pattern>` over ssh SELF-MATCHES**: the pattern is in the remote
+  `bash -c` command line, so pkill kills its own parent shell and the ssh returns
+  nothing at all. Always bracket a character: `pkill -f "[H]yprland"`,
+  `pkill -f "qemu-system-[i]386"`.
+- **Hyprland inherits the launcher's cwd.** Started from `/root`, every
+  `hyprctl dispatch exec` client dies with
+  `slave.c: failed to change working directory to /root: Permission denied`,
+  which reads like a font/Wayland failure but is not. Launch from the user's home.
+- **`/run/user/1000` disappears** when the greetd session ends; `su - cederik`
+  after that gives Hyprland no XDG_RUNTIME_DIR and it bails with "couldn't create
+  /run/user/1000/hypr/<sig>". Re-create it as root before dropping privileges.
+- `ufw` is masked in the image on purpose — it comes up deny-incoming and blocks
+  the port-2222 ssh.

@@ -60,13 +60,26 @@ Wayland backend + shm allocator + wl_shm submission -> pixman Hyprland 1280x720 
 -> grim (harness: /opt/hyprdev/harness-pixman-nested.sh in the chroot). Needed 3
 aquamarine fixes + 1 renderer guard (commits e088146 + 26febe72, see session log).
 
-## M2 (stretch) - boots on the omarchy32cpu VM via DRM
+## M2 - boots on the omarchy32cpu VM via DRM - REACHED 2026-08-31
 
-- [ ] 1. `AQ_FORCE_ALLOCATOR=dumb` selects `CDRMDumbAllocator` as primary
-- [ ] 2. DRM scanout of dumb-buffer PRIME FBs verified on the VM
-- [ ] 3. VM session plumbing (seatd/logind, libinput, VT, flat config)
-- [ ] 4. Full omarchy32cpu VM boot + screenshot + CPU numbers vs llvmpipe baseline
-- [ ] 5. 32-bit review pass on new code (no size assumptions)
+- [x] 1. `AQ_FORCE_ALLOCATOR=dumb` selects `CDRMDumbAllocator` as primary
+      (aquamarine 60a765d; also forces `reopenDRMNode(..., allowRenderNode=false)`
+      because dumb buffers exist only on the primary card node)
+- [x] 2. DRM scanout of dumb-buffer PRIME FBs verified on the VM
+      (`DRM Dumb: Allocated a new buffer with primeFD 34 ... 1280x800 ... XR24`,
+      three of them = the scanout swapchain; frames reach the QEMU display)
+- [x] 3. VM session plumbing: seatd + `LIBSEAT_BACKEND=seatd`, greetd stopped so
+      sway releases DRM master and the VT, root wrapper `/usr/local/bin/vm-pixman`
+      creates `/run/user/1000` and drops to `cederik` via setpriv
+- [x] 4. Full omarchy32cpu VM boot + screenshot + idle CPU number
+      (`~/hyprdev/m2-vm-drm.png`, Hyprland idle = 1 jiffy / 20 s = **0.05 %**)
+- [x] 5. 32-bit review pass: covered by the i686 build phase; the whole stack is
+      built `-m32` and the new renderer/allocator code compiles clean for i686
+      (Hyprland 4a2b510e + 63417a30 were the only 32-bit fixes needed, both
+      language-level, no size assumptions in the pixman/dumb paths)
+
+NOT done (deliberately out of scope, see "optional polish" below): output
+transforms on real hardware, hardware cursor planes, single-pixel-buffer.
 
 ## Session log
 
@@ -137,3 +150,95 @@ aquamarine fixes + 1 renderer guard (commits e088146 + 26febe72, see session log
   3. Then the omarchy32cpu VM boot per PLAN.md M2.3-5.
   4. Consider hyprlock/hyprpaper smoke tests (assets/lockscreen paths) and a
      rotated-output test (transform recipe is unverified beyond NORMAL).
+
+- 2026-08-31 (implementation session 2): **M2 REACHED.** The i686 pixman Hyprland
+  runs on the DRM display of a freshly built omarchy32cpu VM on the bench.
+  Commit: aquamarine `cpu-backend` **60a765d** (NOT pushed). Hyprland fork needed
+  NO change for M2 (HEAD stays 63417a30).
+
+  ### Evidence (all from the VM, artifacts in ~/hyprdev/)
+  - `m2-vm-drm.png` - QEMU `screendump` of the VM's ACTUAL display: foot at
+    1260x780 with its 2px blue active border, the 0xff225588 pixman clear showing
+    through the gaps, the shell prompt `[cederik@omarchy32cpu ~]$` with its cursor
+    block, and the software mouse cursor. Inspected: real rendered content.
+  - `m2-vm-drm-nofoot.png` - the same session before foot: solid clear + cursor
+    (proves the clear path reaches scanout on its own).
+  - `m2-vm-hyprland.log` - the runtime log. Proof lines:
+    ```
+     40: drm: Starting backend for /dev/dri/card0, with driver bochs-drm
+     59: drm: Connector Virtual-1 connected
+     90: drm: gpu /dev/dri/card0 becomes primary drm
+     97: AQ_FORCE_ALLOCATOR: using a drm dumb (cpu) allocator
+    159: Renderer: pixman (software)
+    201: Creating the HyprRenderer (pixman)!
+    405: DRM Dumb: Allocated a new buffer with primeFD 34, size 1280x800, format XR24
+    ```
+    `hyprctl monitors` -> `Monitor Virtual-1 (ID 0) 1280x800@74.994`.
+  - **Idle CPU: 0.05 %** (1 jiffy over 20 s, HZ=100, `/proc/<pid>/stat`). The
+    zero-composite-at-idle property from M1 carries over to the DRM path intact.
+
+  ### The two engineering fixes (aquamarine 60a765d)
+  1. `src/backend/Backend.cpp` - `AQ_FORCE_ALLOCATOR=dumb` was ACCEPTED BUT
+     SILENTLY IGNORED: only `"shm"` was handled, everything else fell through to
+     `CGBMAllocator`. On bochs-drm that means GBM against a device with no render
+     node and no gallium driver. Now `dumb` selects `CDRMDumbAllocator`, and
+     `reopenDRMNode()` is called with `allowRenderNode=false` in that mode because
+     dumb buffers exist ONLY on the primary card node.
+  2. `src/backend/drm/DRM.cpp` (`initMgpu()` + `onReady()`) - with a non-GBM
+     primary allocator there is no EGL/GBM pipeline at all: the compositor renders
+     straight into a mappable scanout buffer and `shouldBlit()` is false without a
+     secondary GPU. Clear `rendererRequired` and return early, exactly as the
+     existing **evdi** path already does. Before the fix, every commit retried
+     `CDRMRenderer::attempt()`: the log filled with `MESA-LOADER: failed to open
+     bochs-drm` + `eglQueryDeviceStringEXT EGL_BAD_PARAMETER` +
+     `drm: initMgpu: no renderer` + `Failed to update renderer state for Virtual-1
+     on applyCommit` on EVERY frame. Non-fatal (the picture was already correct)
+     but an EGL device probe per frame is pure waste on a 2006 CPU.
+     After: MESA-LOADER count 0, initMgpu errors 0, picture unchanged.
+
+  ### The VM (built from scratch, ~35 min)
+  The old server 2.28.72.117 was probed ONCE for its existing image as instructed
+  and refused the connection at the handshake ("Connection reset by peer"), so a
+  fresh omarchy32cpu was built on the bench. Full recipe in BENCH.md; summary:
+  20G raw GPT (512M FAT32 ESP + ext4 root) -> `pacstrap -C
+  /opt/hypr32/pacman-i686.conf` of `install/omarchy-base.packages` -> fontconfig
+  override -> user cederik -> `omarchy-apply-system --install-user cederik
+  --first-install` -> `omarchy-refresh-grub` (BOOTIA32.EFI, i386-efi) -> boots
+  under IA32 OVMF in `qemu-system-i386 -M q35 -cpu coreduo -smp 2 -m 2048`.
+  greetd comes up and autologins into sway; ufw is masked so the bench ssh works.
+
+  ### Gotchas found this session (all cost real time, all avoidable)
+  - `pkill -f qemu-system-i386` / `pkill -f Hyprland` run over ssh SELF-MATCH: the
+    pattern appears in the remote `bash -c` command line, so pkill kills its own
+    parent shell and the ssh dies with no output. Always bracket a character:
+    `pkill -f "[H]yprland"`.
+  - `genfstab`/`pacstrap`'s Arch pacman.conf uses TABS around `SigLevel`, so a
+    `SigLevel *=` sed silently misses it and every later `pacman -S` in the image
+    dies with "required key missing from keyring". Match with `[[:space:]]*`.
+  - mkinitcpio's `kms` hook pulls EVERY GPU firmware blob: a no-autodetect image
+    came to **179 MB** (very slow to load under TCG). Dropping `kms` and putting
+    `bochs` in `MODULES=` gives **27 MB** and boots fine.
+  - Hyprland inherits the launching shell's cwd, so `hyprctl dispatch exec foot`
+    from a wrapper started in `/root` made foot die with
+    `slave.c:332: failed to change working directory to /root: Permission denied`.
+    The wrapper now `cd /home/cederik` first. This looks exactly like a font or
+    Wayland failure in the log; it is not.
+  - `/run/user/1000` is destroyed when the greetd session ends, so `su - cederik`
+    afterwards has no XDG_RUNTIME_DIR and Hyprland bails with "couldn't create
+    /run/user/1000/hypr/<sig>". The root wrapper re-creates it with `install -d`.
+
+  ### EXACT NEXT STEPS (post-M2)
+  1. **Real hardware.** Everything so far is bochs-drm under TCG. The MacBook1,1
+     path is i915/GMA 950 - a real KMS driver with tiling, a cursor plane and
+     possibly no linear XR24 scanout. Boot the image on the A1181 and re-run the
+     same three proofs (log lines, screenshot, idle CPU).
+  2. **CPU comparison vs llvmpipe.** M2 measured pixman idle only. Get the
+     interesting number: pixman vs stock-Hyprland-on-llvmpipe under the SAME load
+     (foot scrolling / window drag) in the same VM. The llvmpipe baseline harness
+     already exists on the bench (`harness-drm.sh`).
+  3. **Optional polish still open** (deliberately skipped in M2): output
+     transforms beyond NORMAL, hardware cursor planes (currently software cursor
+     on the tex path), single-pixel-buffer protocol.
+  4. **Upstreamability.** Two commits in the aquamarine fork are independent of
+     the pixman renderer and could go upstream alone: the ImageCopyCapture
+     null-deref guard (from M1) and the `initMgpu` cpu-allocator early-out here.
