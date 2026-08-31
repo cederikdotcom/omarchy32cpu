@@ -6,7 +6,7 @@ Read [`../../TESTING.md`](../../TESTING.md) first. It says what is known broken 
 
 Status: rehearsed end to end on 2026-08-31 in a QEMU VM with no GPU - the build below booted to a themed desktop with a working menu and terminal. Nobody has run it on real x86_64 hardware yet. That is what we are asking for. See "What was verified" at the end for exactly what that covers.
 
-**Mid-migration warning.** That rehearsal ran the sway session this fork used before the pixman renderer for Hyprland existed. sway is now deleted and the session is upstream Hyprland on the pixman renderer, so step 9 below is new and the rehearsal has not been repeated. Expect to debug.
+The rehearsal was originally run against the sway session this fork used before the pixman renderer for Hyprland existed. sway is now deleted, and the rehearsal was **repeated end to end on the Hyprland session on 2026-08-31**, from a root built by these steps. What that covers is in "What was verified" at the end.
 
 ## What differs from the i686 MacBook path
 
@@ -176,13 +176,22 @@ Verified on 2026-08-31 against official Arch x86_64 (`core` and `extra` from `ge
 
 The renderer is worth restating: that is a full desktop drawn with the CPU, on a `-vga std` bochs framebuffer with no GPU acceleration available at all.
 
-Everything in this section was verified with the sway session, before the compositor swap. The package list, the boot chain, `omarchy-apply-system` and `omarchy-refresh-grub` are unaffected by that swap; the session itself has to be rerun.
+Re-verified on the Hyprland session on 2026-08-31, on the same bench and the same no-KVM TCG VM:
+
+- **greetd starts the session itself.** `initial_session` autologs the install user in and the desktop comes up with no hand-launching; `journalctl -b -u greetd` shows one `session opened for user`. The process tree is `start-hyprland` → `Hyprland --watchdog-fd 4`.
+- **The pixman renderer is the one running.** `hyprctl systeminfo` reports `Renderer: pixman (software)` and `Backend: drm` on `Virtual-1 1280x800`. This is worth checking rather than assuming: mesa's llvmpipe can supply GLES 3.0 in software, so a session that merely *renders* in a VM is not proof the CPU renderer was selected.
+- **The session shell comes up**: waybar (with the `hyprland/workspaces` and `hyprland/submap` modules loading cleanly), mako, swaybg and swayidle.
+- **The Lua config layer loads**: 414 keybindings, and waybar reserves its 26px at the top of the monitor.
+- **Real key events work**, sent to the guest rather than dispatched over IPC: `Super+Return` opens foot, `Super+Space` opens the Omarchy menu, `Super+2` switches workspace and waybar follows.
+- **Theme switching retints Hyprland.** `omarchy-theme-set Gruvbox` moves `general:col.active_border` from `ff7aa2f7` to `ff7daea3`, and the theme survives a reboot.
+
+The package list, the boot chain, `omarchy-apply-system` and `omarchy-refresh-grub` were unaffected by the compositor swap and were re-run anyway as part of this.
 
 Not verified, and the reason this runbook exists:
 
 - **No real x86_64 hardware.** Nothing here says anything about real graphics, wifi, audio, battery, suspend, brightness or a real display panel.
 - **The steps as printed were not run as printed.** The VM was built by scripting the same operations against a mounted disk image rather than by typing them at an Arch ISO prompt. The commands are the same; the sequencing of a live install is not something this proves.
-- **The GLES2 renderer.** The session forces pixman. Nobody has run `WLR_RENDERER=gles2` on hardware that could accelerate it.
+- **The GL renderer.** The session forces pixman. Nobody has run Hyprland's GL renderer here on hardware that could accelerate it.
 
 Two known cosmetic issues on this path, both already understood:
 
@@ -191,8 +200,9 @@ Two known cosmetic issues on this path, both already understood:
 
 ## Troubleshooting
 
-- **Black screen after greetd.** Confirm the renderer with `env | grep WLR_` inside the session, and check `dmesg | grep -i drm` for KMS errors. `journalctl -b -u greetd` has the login side.
+- **Black screen after greetd.** Ask the compositor what it picked: `hyprctl systeminfo | grep Renderer` should say `pixman (software)`. If it says anything else, the session did not get `HYPRLAND_RENDERER=pixman` - check `tr '\0' '\n' < /proc/$(pgrep -x Hyprland)/environ | grep -E 'HYPRLAND_RENDERER|AQ_'`. Then `dmesg | grep -i drm` for KMS errors; `journalctl -b -u greetd` has the login side. Note that Hyprland's own log at `$XDG_RUNTIME_DIR/hypr/<sig>/hyprland.log` is empty by default, because `debug:disable_logs` is on; `hyprctl systeminfo` is the reliable question to ask.
+- **A session you picked from the greeter menu gives a black screen.** The Hyprland build installs `hyprland.desktop` and `hyprland-uwsm.desktop` into `/usr/local/share/wayland-sessions/`, and neither sets the pixman renderer. The entry that works is `Omarchy`, at `/usr/share/wayland-sessions/omarchy.desktop`. Delete upstream's two if you do not want them offered.
 - **greetd shows the text greeter instead of autologging in.** `initial_session` runs once per boot; that is greetd semantics. A `systemctl restart greetd` always lands on tuigreet. Reboot, or log in through it.
-- **You want to try the GPU.** The session forces `WLR_RENDERER=pixman` for the MacBook's sake. On real hardware `WLR_RENDERER=gles2` should be hardware-accelerated and faster, and nobody has tested it. Please do, and report it - see "The renderer question" in TESTING.md.
+- **You want to try the GPU.** The session forces `HYPRLAND_RENDERER=pixman` for the MacBook's sake. On real hardware, dropping that variable (and `AQ_FORCE_ALLOCATOR=dumb` with it) gives you Hyprland's normal GL path, which should be accelerated and faster, and nobody has tested it. Please do, and report it - see "The renderer question" in TESTING.md.
 - **`pacman` wants to replace your pacman.conf.** It will not. The archlinux32 configs in `default/pacman/` are only applied when `uname -m` reports i686; on anything else the installer leaves your `/etc/pacman.conf` and mirrorlist alone.
 - **Screen sharing fails.** Permanent under the pixman renderer, on every architecture. Not a bug.

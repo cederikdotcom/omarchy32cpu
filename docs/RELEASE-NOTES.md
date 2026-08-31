@@ -11,7 +11,18 @@ or any real hardware at all.
 
 **The compositor changed after those validations.** See "Hyprland
 replaces sway" immediately below: every session-level result recorded
-further down was obtained with sway and has to be obtained again.
+further down was obtained with sway.
+
+**Re-obtained on Hyprland for x86_64 on 2026-08-31.** A VM installed from
+this tree by the x86_64 runbook boots, greetd starts the session itself,
+and `hyprctl systeminfo` reports `Renderer: pixman (software)` on the DRM
+backend against a `-vga std` framebuffer with no GPU. waybar, mako,
+swaybg and swayidle come up, 414 keybindings load, Super+Return opens a
+terminal, Super+Space opens the Omarchy menu, and switching themes
+retints Hyprland's own borders. Screenshot:
+`docs/pixman-renderer/x86_64-vm.png`. The i686 session is the same
+exercise on the harder architecture and has not been run yet; nothing
+below about i686 or real hardware has changed.
 
 The CPU-only core is architecture-independent, and x86_64 is where most
 testing will happen: see `TESTING.md` and
