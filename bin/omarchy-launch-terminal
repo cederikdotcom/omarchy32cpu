@@ -3,4 +3,13 @@
 # omarchy:summary=Launch a terminal in the active terminal's current directory
 # omarchy:args=[command...]
 
-exec setsid uwsm-app -- xdg-terminal-exec --dir="$(omarchy-cmd-terminal-cwd)" "$@"
+# Upstream relies on xdg-terminal-exec, which is an AUR package and is not in
+# the fork's core package set (nor in the archlinux32 repos). Use it when it is
+# there, and fall back to foot, which the core does ship.
+dir="$(omarchy-cmd-terminal-cwd)"
+
+if omarchy-cmd-present xdg-terminal-exec; then
+  exec setsid uwsm-app -- xdg-terminal-exec --dir="$dir" "$@"
+else
+  exec setsid uwsm-app -- foot --working-directory="$dir" "$@"
+fi

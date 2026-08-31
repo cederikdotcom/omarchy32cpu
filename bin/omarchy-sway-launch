@@ -14,7 +14,12 @@
 export OMARCHY_PATH
 
 # Session defaults (previously default/uwsm/default).
-export TERMINAL=xdg-terminal-exec
+# xdg-terminal-exec is an AUR package and is not in the core set; foot is.
+if command -v xdg-terminal-exec >/dev/null; then
+  export TERMINAL=xdg-terminal-exec
+else
+  export TERMINAL=foot
+fi
 export EDITOR="omarchy-launch-editor --inline"
 
 # GMA 950 cannot serve GLES: composite on the CPU, and don't die when
