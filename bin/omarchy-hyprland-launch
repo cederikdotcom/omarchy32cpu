@@ -84,4 +84,17 @@ export XKB_DEFAULT_OPTIONS=$xkb_options
 # bus would split notifications and user units onto different buses).
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
 
+# Hyprland 0.56 wants to be started by its start-hyprland watchdog, which
+# supervises the compositor and drives crash recovery; launched without it,
+# Hyprland raises "started without start-hyprland" on the desktop at every
+# login. The watchdog execvp's Hyprland from PATH and inherits this
+# environment, so everything exported above still reaches the compositor.
+# It ships with the fork build, but fall back if an install predates it.
+if command -v start-hyprland >/dev/null; then
+  if (($#)); then
+    exec start-hyprland -- "$@"
+  fi
+  exec start-hyprland
+fi
+
 exec Hyprland "$@"

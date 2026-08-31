@@ -13,11 +13,16 @@ trap 'rm -rf "$test_tmp"' EXIT
 stub_bin="$test_tmp/bin"
 mkdir -p "$stub_bin"
 
-cat >"$stub_bin/Hyprland" <<'SH'
+> "$stub_bin/report" cat <<'SH'
 #!/bin/bash
 printf '[%s] [%s] [%s]\n' "$XKB_DEFAULT_LAYOUT" "$XKB_DEFAULT_VARIANT" "$XKB_DEFAULT_OPTIONS"
 SH
-chmod +x "$stub_bin/Hyprland"
+chmod +x "$stub_bin/report"
+# The launcher prefers the start-hyprland watchdog and falls back to Hyprland.
+# Stub both, so the layout is asserted on whichever path the launcher takes and
+# a machine with a real start-hyprland on PATH cannot change the result.
+cp "$stub_bin/report" "$stub_bin/Hyprland"
+cp "$stub_bin/report" "$stub_bin/start-hyprland"
 
 resolved_input() {
   local vconsole="${1-__missing__}"
