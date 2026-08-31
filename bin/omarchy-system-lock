@@ -5,9 +5,11 @@
 # omarchy:name=lock
 # omarchy:examples=omarchy system lock
 
-# Omarchy Omarchy CPU locks with swaylock. The theme pipeline renders
-# per-theme swaylock arguments (default/themed/swaylock.args.tpl) into the
-# current theme directory; fall back to a plain dark lock when absent.
+# Omarchy CPU locks with swaylock: the Quickshell lock screen is gone until
+# issue #2 restores it. swaylock is an ordinary ext-session-lock client and
+# works under Hyprland unchanged. The theme pipeline renders per-theme
+# swaylock arguments (default/themed/swaylock.args.tpl) into the current
+# theme directory; fall back to a plain dark lock when absent.
 
 if ! pgrep -x swaylock >/dev/null; then
   swaylock_args=(-f --ignore-empty-password)
@@ -25,7 +27,7 @@ if ! pgrep -x swaylock >/dev/null; then
 fi
 
 # Set keyboard layout to default (first layout)
-swaymsg 'input type:keyboard xkb_switch_layout 0' >/dev/null 2>&1
+hyprctl switchxkblayout all 0 > /dev/null 2>&1
 
 # Ensure 1password is locked. Use timeout because `1password --lock` can
 # otherwise leave a full Electron helper tree running after each lock.

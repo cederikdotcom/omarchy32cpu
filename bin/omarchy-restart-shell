@@ -5,22 +5,23 @@
 
 # Omarchy CPU's shell is waybar (bar) plus mako (notifications); restart both.
 # swaylock is its own process, so unlike the Quickshell shell a restart never
-# threatens an active session lock.
+# threatens an active session lock, and none of upstream's relock dance is
+# needed here. Restore this script with the Quickshell shell (issue #2).
 
 # Allow running from outside the session (e.g. over ssh) by deriving the
-# sway IPC socket from the newest one in the runtime dir.
-if [[ -z ${SWAYSOCK:-} ]]; then
-  sway_sock=$(find "${XDG_RUNTIME_DIR:-/run/user/$UID}" -mindepth 1 -maxdepth 1 -name 'sway-ipc.*.sock' -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -n 1 | cut -d' ' -f2-)
-  [[ -n $sway_sock ]] && export SWAYSOCK=$sway_sock
+# Hyprland instance signature from the newest instance runtime dir.
+if [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+  hypr_dir=$(find "${XDG_RUNTIME_DIR:-/run/user/$UID}/hypr" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -n 1 | cut -d' ' -f2-)
+  [[ -n $hypr_dir ]] && export HYPRLAND_INSTANCE_SIGNATURE=${hypr_dir##*/}
 fi
 
 omarchy-bar stop
 pkill -x mako 2>/dev/null
 
-# Spawn from sway so the shell inherits the canonical session environment,
+# Spawn from Hyprland so the shell inherits the canonical session environment,
 # not transient variables from a terminal, SSH connection, or development
 # tool. Without a compositor to ask, launch directly as a best effort.
-if ! swaymsg 'exec omarchy-launch-shell' >/dev/null 2>&1; then
+if ! hyprctl dispatch 'hl.dsp.exec_cmd("omarchy-launch-shell")' >/dev/null 2>&1; then
   omarchy-launch-shell
 fi
 

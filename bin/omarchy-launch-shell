@@ -3,8 +3,9 @@
 # omarchy:summary=Launch the Omarchy shell components (waybar + mako)
 # omarchy:hidden=true
 
-# Omarchy CPU's shell is waybar (bar) plus mako (notifications). The sway
-# session starts both itself; this launcher exists for omarchy-restart-shell
+# Omarchy CPU's shell is waybar (bar) plus mako (notifications), standing in
+# for Quickshell until issue #2 restores it. The Hyprland session starts both
+# itself (default/hypr/autostart.lua); this launcher exists for omarchy-restart-shell
 # and anyone who needs the shell back without bouncing the session. The old
 # Quickshell supervisor (relaunch budget, compositor probes) is gone: waybar
 # and mako are plain processes with no self-reload to babysit.

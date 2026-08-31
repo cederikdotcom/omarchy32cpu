@@ -3,9 +3,11 @@
 # omarchy:summary=Launch an app detached from the caller (uwsm-less stand-in)
 # omarchy:hidden=true
 
-# Omarchy CPU runs sway without uwsm. Callers throughout bin/ still launch
-# apps via uwsm-app; keep the name and detach semantics without the session
-# manager.
+# uwsm is not packaged for archlinux32 i686, so Omarchy CPU starts Hyprland
+# directly (bin/omarchy-hyprland-launch) and there is no uwsm-app on PATH.
+# Callers throughout bin/ still launch apps by that name; keep the name and the
+# detach semantics without the session manager. Drop this shim if uwsm ever
+# joins the package set.
 
 [[ ${1:-} == "--" ]] && shift
 exec setsid -f "$@"

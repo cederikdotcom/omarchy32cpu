@@ -672,9 +672,8 @@ To stop: omarchy-windows-vm stop"
   fi
   export KRB5_CONFIG="$KRB5_CONF"
 
-  # Detect display scale from the compositor
-  DISPLAY_SCALE=$(swaymsg -t get_outputs | jq -r '.[] | select (.focused == true) | .scale')
-  SCALE_PERCENT=$(echo "$DISPLAY_SCALE" | awk '{print int($1 * 100)}')
+  HYPR_SCALE=$(hyprctl monitors -j | jq -r '.[] | select (.focused == true) | .scale')
+  SCALE_PERCENT=$(echo "$HYPR_SCALE" | awk '{print int($1 * 100)}')
 
   RDP_SCALE=""
   if ((SCALE_PERCENT >= 170)); then
