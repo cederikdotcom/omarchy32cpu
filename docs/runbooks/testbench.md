@@ -3,6 +3,12 @@
 A Hetzner Cloud server that stands in for the MacBook1,1 during
 development. Created 2026-08-30. Delete it when the port ships.
 
+Note: the sway smoke tests below date from when this fork substituted
+sway for Hyprland. sway is now deleted; the session is upstream
+Hyprland on the pixman renderer. The equivalents are in
+`/home/claude-user/hyprdev/BENCH.md` on the hyprbuild box, which is
+where the compositor work happens.
+
 - Server: `omarchy32-test`, cpx22 (2 vCPU x86, 4 GB), nbg1, Hetzner
   project context `cederik`, root@2.28.72.117 (key: neoremote).
 - No nested KVM on Hetzner Cloud; the VM runs in QEMU TCG (software

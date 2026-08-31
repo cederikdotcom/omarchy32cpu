@@ -36,35 +36,52 @@ you can send** - what your machine is, and what did or did not come up.
 
 | Upstream | This fork | Why |
 |---|---|---|
-| Hyprland (GLES 3.0+) | sway 1.8, pixman renderer | zero-GPU compositing |
+| Hyprland on GLES 3.0+ | the same Hyprland on a pixman (CPU) renderer | zero-GPU compositing |
 | Quickshell desktop | waybar, fuzzel, mako, swaylock behind shims | no Qt GL |
 | SDDM greeter | greetd + tuigreet, autologin session | no GL at login |
 | limine + 64-bit UKI | GRUB i386-efi as BOOTIA32.EFI | 32-bit Apple EFI |
 | Arch x86_64 + pkgs.omarchy.org | archlinux32 i686 + fork overrides | 32-bit CPU |
-| 147-package app fleet | 58-package core, bring your own apps | 2 GB RAM |
+| 147-package app fleet | 78-package core, bring your own apps | 2 GB RAM |
 
-Kept unchanged: the theme engine (all 22 themes render sway, waybar,
-mako and swaylock), the bash environment, the omarchy CLI router,
-keybinding philosophy, zram/oomd memory tuning. New: `omarchy-remote-view`
-serves the live session over VNC (wayvnc, CPU-side screencopy) for
-cloud and headless use.
+The compositor is real Hyprland, not a substitute: this fork's
+[Hyprland](https://github.com/cederikdotcom/Hyprland/tree/pixman-renderer)
+and [aquamarine](https://github.com/cederikdotcom/aquamarine/tree/cpu-backend)
+branches add a pixman software renderer, selected with
+`HYPRLAND_RENDERER=pixman`. It renders flat: no animations, blur, shadows
+or rounded corners. The Hyprland and aquamarine binaries come from that
+fork build until a fork package repo exists; everything else installs from
+the distribution repos.
+
+Kept unchanged: the Hyprland config layer (`config/hypr`, `default/hypr`),
+the theme engine, the bash environment, the omarchy CLI router, keybinding
+philosophy, zram/oomd memory tuning. New: `omarchy-remote-view` serves the
+live session over VNC (wayvnc, CPU-side screencopy) for cloud and headless
+use.
 
 ## Status
 
-Pre-release, software-validated end to end on two QEMU benches and no
-real hardware at all.
+Pre-release, and mid-migration. The fork shipped a sway substitute until
+the pixman renderer for Hyprland worked; sway is now deleted and the
+upstream Hyprland session is back. **Every install-level validation below
+was done on the sway session and has to be redone on Hyprland.**
+
+Proven on the pixman renderer itself (see
+[`docs/pixman-renderer/PROGRESS.md`](docs/pixman-renderer/PROGRESS.md)):
+Hyprland composites headless, nested, and on a real DRM display inside the
+i686 VM, damage-driven, at 0.05 % idle CPU.
+
+Proven on the sway session, and now pending a rerun:
 
 - **i686**, on a bench that mimics the MacBook1,1 (32-bit CPU model,
   2 GB RAM, IA32 UEFI firmware): the fork's own installer builds a
-  system that boots to the themed sway desktop with zero failed units.
+  system that boots to a themed desktop with zero failed units.
 - **x86_64**, in a VM with no GPU: the same procedure boots to the same
-  desktop on sway 1.12 with the pixman renderer, menu and terminal
-  working. Screenshot:
+  desktop with the pixman renderer, menu and terminal working.
+  Screenshot:
   [`docs/pixman-renderer/x86_64-vm.png`](docs/pixman-renderer/x86_64-vm.png).
 
-`test/cli` 116/116, `test/shell` 155/155. Not yet run on the physical
-MacBook (the GMA 950 render floor is the open hardware question), nor on
-any real x86_64 machine.
+Not yet run on the physical MacBook (the GMA 950 render floor is the open
+hardware question), nor on any real x86_64 machine.
 
 ## Documentation
 

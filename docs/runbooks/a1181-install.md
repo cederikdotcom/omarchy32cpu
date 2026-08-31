@@ -1,10 +1,20 @@
 # Runbook: install Omarchy CPU (32-bit) on the MacBook1,1
 
 Status: REHEARSED END TO END 2026-08-30 in the test-bench VM (32-bit
-UEFI firmware -> BOOTIA32.EFI -> GRUB -> i686 kernel -> greetd -> sway
-with the pixman renderer on screen). Only the on-hardware GPU spike is
-open. See docs/a1181-gap-analysis.md for the plan and testbench.md for
-the VM.
+UEFI firmware -> BOOTIA32.EFI -> GRUB -> i686 kernel -> greetd -> a
+session with the pixman renderer on screen). See
+docs/a1181-gap-analysis.md for the plan and testbench.md for the VM.
+
+MID-MIGRATION WARNING: that rehearsal ran the sway session this fork
+used before the pixman renderer for Hyprland existed. sway is now
+deleted and the session is upstream Hyprland on the pixman renderer, so
+step 5b below is new and the rehearsal has not been repeated. The i686
+compositor build is also the hardest part of this runbook: archlinux32
+carries no aquamarine, hyprcursor or hyprgraphics, its hyprutils and
+hyprlang are far too old, and its newest lua is 5.4 while Hyprland 0.56
+requires 5.5. All of those have to be built for i686 alongside the two
+override packages below. Open items: that build, and the on-hardware
+GPU spike.
 
 Rehearsal lessons now baked into the steps below:
 - Set `Architecture = i686` in /etc/pacman.conf of the installed system
@@ -13,11 +23,12 @@ Rehearsal lessons now baked into the steps below:
 - Write /etc/vconsole.conf (e.g. `KEYMAP=us`) before mkinitcpio runs or
   the image build errors out.
 - greetd: both sessions launch
-  `/usr/share/omarchy/bin/omarchy-sway-launch` (the `[initial_session]`
-  boots straight into sway, matching upstream's autologin UX). The
-  wrapper sets the pixman renderer, OMARCHY_PATH, and the systemd user
-  bus; never wrap the session in dbus-run-session (its private bus
-  splits notifications and user units apart).
+  `/usr/share/omarchy/bin/omarchy-hyprland-launch` (the `[initial_session]`
+  boots straight into the desktop, matching upstream's autologin UX).
+  The wrapper sets `HYPRLAND_RENDERER=pixman`, `AQ_FORCE_ALLOCATOR=dumb`,
+  OMARCHY_PATH and the systemd user bus; never wrap the session in
+  dbus-run-session (its private bus splits notifications and user units
+  apart).
 - grub-install for i386-efi with `--removable --no-nvram` needs no
   efibootmgr and no NVRAM access; it just places BOOTIA32.EFI.
 
@@ -53,7 +64,24 @@ Rehearsal lessons now baked into the steps below:
 4. `pacstrap` base, linux, linux-firmware, then the Lite core from
    `install/omarchy-base.packages` on this branch.
 5. Install the two i686 override packages (see "Override packages"
-   below). fontconfig is mandatory: without it sway does not start.
+   below). fontconfig is mandatory: without it the desktop's text
+   stack does not start.
+5b. Build and install the compositor. `install/omarchy-base.packages`
+   deliberately does not carry Hyprland: the session needs this fork's
+   build, which adds the pixman (CPU) renderer.
+
+   - cederikdotcom/Hyprland, branch `pixman-renderer` (base v0.56.2)
+   - cederikdotcom/aquamarine, branch `cpu-backend` (base v0.15.0)
+
+   On i686 their dependencies have to be built too: aquamarine,
+   hyprcursor and hyprgraphics are absent from archlinux32, hyprutils
+   (0.2.6) and hyprlang (0.5.2) are far below what Hyprland 0.56 needs,
+   and lua 5.5 (required, `lua>=5.5 lua<5.6`) is absent - archlinux32's
+   newest is 5.4.7. Everything else Hyprland links (pixman, cairo,
+   pango, libdrm, libinput, libxkbcommon, libei, lcms2, muparser, re2,
+   tomlplusplus, mesa, xorg-xwayland) is in the repos and in the core
+   package list. Until a fork package repo exists this step is
+   manual.
 6. Put the repo at /usr/share/omarchy, create the user, then run
    `omarchy-apply-system --install-user <user> --first-install` in the
    chroot (validated end to end: config, hardware, greetd login,
@@ -72,8 +100,8 @@ Rehearsal lessons now baked into the steps below:
    Optional Apple boot picker entry: `grub-mkstandalone -O i386-efi -o
    /boot/System/Library/CoreServices/boot.efi` on a blessed HFS+ helper
    partition.
-9. Reboot. greetd starts `/usr/share/omarchy/bin/omarchy-sway-launch`
-   (autologin into sway with the pixman renderer). Note ufw comes up
+9. Reboot. greetd starts `/usr/share/omarchy/bin/omarchy-hyprland-launch`
+   (autologin into Hyprland with the pixman renderer). Note ufw comes up
    enforcing deny-incoming; `ufw allow` for anything you need (rules
    cannot be added from inside a chroot).
 
@@ -89,8 +117,8 @@ Release: https://github.com/cederikdotcom/omarchy32cpu/releases/tag/overrides-i6
 
 ```bash
 # fontconfig 2:2.18.3-2 - MANDATORY. archlinux32 ships 2:2.14.1 while its
-# pango 1:1.57.1 needs >= 2.16; without this sway dies at startup with
-# "undefined symbol: FcConfigSetDefaultSubstitute".
+# pango 1:1.57.1 needs >= 2.16; without this the desktop dies at startup
+# with "undefined symbol: FcConfigSetDefaultSubstitute".
 sudo pacman -U https://github.com/cederikdotcom/omarchy32cpu/releases/download/overrides-i686-20260831/fontconfig-2.18.3-2-i686.pkg.tar.zst
 
 # neatvnc 0.8.1-3 - only needed for omarchy-remote-view. archlinux32 ships
@@ -120,8 +148,8 @@ PKGBUILD or pacman will refuse the install as breaking wayvnc's
 ## Common operations
 
 - Refresh boot entries after a kernel update: `omarchy-refresh-grub`.
-- Theme switch: `omarchy-theme-set <name>` (renders sway/waybar/mako
-  templates).
+- Theme switch: `omarchy-theme-set <name>` (renders hyprland/waybar/
+  mako templates).
 - Fan control: mbpfan as a service; temps via `sensors` (applesmc).
 - Remote view: `omarchy-remote-view on` (or menu: Trigger > Toggle >
   Remote View) serves the session on 127.0.0.1:5901; from another
@@ -130,13 +158,17 @@ PKGBUILD or pacman will refuse the install as breaking wayvnc's
 
 ## Troubleshooting
 
-- **sway dies with a fontconfig symbol error:** the fork's fontconfig
-  override is missing. Install it from the fork repo (or rebuild
-  fontconfig >= 2.16 from the Arch PKGBUILD with docs disabled and
-  meson >= 1.11 from pip).
-- **Black screen on sway start:** confirm `WLR_RENDERER=pixman`; check
-  `dmesg | grep i915` for KMS errors. Fall back to i3/X11 with the
-  modesetting driver.
+- **The session dies with a fontconfig symbol error:** the fork's
+  fontconfig override is missing. Install it from the fork repo (or
+  rebuild fontconfig >= 2.16 from the Arch PKGBUILD with docs disabled
+  and meson >= 1.11 from pip).
+- **Hyprland exits complaining about GLES 3.0:** the installed Hyprland
+  or aquamarine is a stock build, not the fork's. Only the fork's
+  branches carry the pixman renderer.
+- **Black screen on session start:** confirm `HYPRLAND_RENDERER=pixman`
+  and `AQ_FORCE_ALLOCATOR=dumb` reached the compositor (the log names
+  the renderer it selected); check `dmesg | grep i915` for KMS errors.
+  Fall back to i3/X11 with the modesetting driver.
 - **Firmware boots to a folder-with-question-mark:** the EFI entry is
   lost. Boot the USB, chroot, rerun `grub-install --removable`, or
   bless the boot.efi helper from macOS.

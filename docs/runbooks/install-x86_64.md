@@ -4,11 +4,13 @@ The low-friction path, and the one most testers want. omarchy32cpu was built for
 
 Read [`../../TESTING.md`](../../TESTING.md) first. It says what is known broken and what to report.
 
-Status: rehearsed end to end on 2026-08-31 in a QEMU VM with no GPU - the build below boots to the themed sway desktop, with a working menu and terminal. Nobody has run it on real x86_64 hardware yet. That is what we are asking for. See "What was verified" at the end for exactly what that covers.
+Status: rehearsed end to end on 2026-08-31 in a QEMU VM with no GPU - the build below booted to a themed desktop with a working menu and terminal. Nobody has run it on real x86_64 hardware yet. That is what we are asking for. See "What was verified" at the end for exactly what that covers.
+
+**Mid-migration warning.** That rehearsal ran the sway session this fork used before the pixman renderer for Hyprland existed. sway is now deleted and the session is upstream Hyprland on the pixman renderer, so step 9 below is new and the rehearsal has not been repeated. Expect to debug.
 
 ## What differs from the i686 MacBook path
 
-The procedure below is the [A1181 runbook](a1181-install.md) with four things removed. Everything else - the same package core, the same `omarchy-apply-system` flow, the same manual config seeding in place of `/etc/skel`, the same greetd session, the same `WLR_RENDERER=pixman` - is unchanged.
+The procedure below is the [A1181 runbook](a1181-install.md) with four things removed. Everything else - the same package core, the same `omarchy-apply-system` flow, the same manual config seeding in place of `/etc/skel`, the same greetd session, the same pixman renderer - is unchanged.
 
 | A1181 (i686) | x86_64 | Why |
 |---|---|---|
@@ -47,7 +49,7 @@ You need an Arch install medium and the standard Arch install knowledge. This is
    arch-chroot /mnt locale-gen
    ```
 
-   `omarchy-sway-launch` reads the keyboard layout out of `/etc/vconsole.conf`, so what you put there is what the desktop gets.
+   `omarchy-hyprland-launch` reads the keyboard layout out of `/etc/vconsole.conf`, so what you put there is what the desktop gets.
 
 5. Put the repo where the session expects it, and create your user:
 
@@ -89,7 +91,16 @@ You need an Arch install medium and the standard Arch install knowledge. This is
 
    If you would rather use systemd-boot, install it the usual way and skip this step. Nothing in the fork depends on GRUB except this command.
 
-9. Reboot. greetd starts `/usr/share/omarchy/bin/omarchy-sway-launch` and autologs `<user>` into sway with the pixman renderer.
+9. **Install the compositor.** `install/omarchy-base.packages` deliberately does not carry Hyprland: the session needs this fork's build, which adds the pixman (CPU) renderer that upstream Hyprland does not have.
+
+   ```bash
+   # cederikdotcom/Hyprland   branch pixman-renderer  (base v0.56.2)
+   # cederikdotcom/aquamarine branch cpu-backend      (base v0.15.0)
+   ```
+
+   Build aquamarine first, then Hyprland against it, and install both into the target. On x86_64 the hypr* dependencies (`hyprutils`, `hyprlang`, `hyprcursor`, `hyprgraphics`, `hyprwayland-scanner`) come from official Arch at the versions Hyprland 0.56 wants, so only those two projects have to be built. A stock `pacman -S hyprland` will install and then fail on the missing GLES 3.0; it is not a substitute. Until a fork package repo exists this step is manual.
+
+10. Reboot. greetd starts `/usr/share/omarchy/bin/omarchy-hyprland-launch`, which sets `HYPRLAND_RENDERER=pixman` and `AQ_FORCE_ALLOCATOR=dumb` and autologs `<user>` into Hyprland.
 
 ## Test target A: a QEMU VM with no GPU
 
@@ -150,10 +161,12 @@ Verified on 2026-08-31 against official Arch x86_64 (`core` and `extra` from `ge
 - **`omarchy-apply-system --install-user <user> --first-install` exits 0**, with every install phase logged as Completed, `display-manager.service` symlinked to `greetd.service`, and the expected `/etc/greetd/config.toml` including the `initial_session` autologin block.
 - **`omarchy-provision-user --first-install --force` exits 0** and lands the Tokyo Night theme in `~/.local/state/omarchy/current/`.
 - **`omarchy-refresh-grub` installs `BOOTX64.EFI`** and writes a grub.cfg with working kernel entries.
-- **The whole chain boots**: 64-bit OVMF firmware -> `BOOTX64.EFI` -> GRUB -> kernel -> greetd -> the autologin sway session on the display, with `systemd` reaching `graphical.target`.
-- **The desktop works.** `docs/pixman-renderer/x86_64-vm.png` is a screenshot of that VM: sway, waybar, swaybg with the Tokyo Night background, two mako notifications, the fuzzel menu open on `Super+Space`, and a foot terminal opened with `Super+Return` showing `sway version 1.12` and `WLR_RENDERER=pixman`.
+- **The whole chain boots**: 64-bit OVMF firmware -> `BOOTX64.EFI` -> GRUB -> kernel -> greetd -> the autologin session on the display, with `systemd` reaching `graphical.target`.
+- **The desktop works.** `docs/pixman-renderer/x86_64-vm.png` is a screenshot of that VM: the compositor, waybar, swaybg with the Tokyo Night background, two mako notifications, the fuzzel menu open on `Super+Space`, and a foot terminal opened with `Super+Return`.
 
-The renderer is worth restating: that is sway 1.12 drawing a full desktop with the CPU, on a `-vga std` bochs framebuffer with no GPU acceleration available at all.
+The renderer is worth restating: that is a full desktop drawn with the CPU, on a `-vga std` bochs framebuffer with no GPU acceleration available at all.
+
+Everything in this section was verified with the sway session, before the compositor swap. The package list, the boot chain, `omarchy-apply-system` and `omarchy-refresh-grub` are unaffected by that swap; the session itself has to be rerun.
 
 Not verified, and the reason this runbook exists:
 

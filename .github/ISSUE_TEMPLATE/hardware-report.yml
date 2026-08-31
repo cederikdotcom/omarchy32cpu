@@ -84,7 +84,7 @@ body:
       options:
         - label: Boots (bootloader to kernel)
         - label: greetd starts (autologin session or the tuigreet greeter)
-        - label: sway session comes up with a bar and a wallpaper
+        - label: Hyprland session comes up with a bar and a wallpaper
         - label: Theme switching (`omarchy-theme-set <name>`)
         - label: Menu opens (`Super+Space`)
         - label: Wifi
@@ -97,12 +97,12 @@ body:
     id: renderer
     attributes:
       label: Renderer
-      description: See "The renderer question" in TESTING.md. If you have a real GPU, please try `WLR_RENDERER=gles2 sway` as well - nobody has yet.
+      description: See "The renderer question" in TESTING.md. If you have a real GPU, please try `HYPRLAND_RENDERER=gl Hyprland` as well - nobody has yet.
       options:
         - pixman (the default) - worked
         - pixman - failed
-        - gles2, hardware-accelerated - worked
-        - gles2 - failed
+        - gl, hardware-accelerated - worked
+        - gl - failed
         - Both worked
         - Fell back to i3 on X11
         - Did not get far enough to tell
@@ -116,7 +116,7 @@ body:
       description: |
         What broke, where it stopped, anything surprising. Paste diagnostics from
         the "Diagnostics to attach" section of TESTING.md - at minimum
-        `swaymsg -t get_version`, `journalctl -b -u greetd`, and
+        `hyprctl version`, `journalctl -b -u greetd`, and
         `dmesg | grep -iE 'drm|i915|amdgpu|nouveau'` if the display misbehaved.
       render: shell
     validations:

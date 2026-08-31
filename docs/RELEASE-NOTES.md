@@ -4,10 +4,14 @@
 archlinux32 i686. Based on upstream Omarchy v4.0.1 "Quattro". First
 target hardware: 2006 Apple MacBook1,1 (A1181, EMC 2092).
 
-Status: pre-release. Everything below reflects the state validated on
-the cloud test bench on 2026-08-30, plus the x86_64 bring-up on
-2026-08-31. The port has not yet touched the real MacBook, or any real
-hardware at all.
+Status: pre-release, mid-migration. Everything below reflects the state
+validated on the cloud test bench on 2026-08-30, plus the x86_64
+bring-up on 2026-08-31. The port has not yet touched the real MacBook,
+or any real hardware at all.
+
+**The compositor changed after those validations.** See "Hyprland
+replaces sway" immediately below: every session-level result recorded
+further down was obtained with sway and has to be obtained again.
 
 The CPU-only core is architecture-independent, and x86_64 is where most
 testing will happen: see `TESTING.md` and
@@ -17,7 +21,8 @@ testing will happen: see `TESTING.md` and
 
 The full Omarchy workflow with every pixel drawn by the CPU:
 
-- sway 1.8 with the wlroots pixman renderer replaces Hyprland
+- upstream Hyprland, on this fork's pixman (CPU) renderer, with every
+  effect it cannot draw turned off
 - waybar + fuzzel + mako + swaylock replace the Quickshell desktop,
   behind shims that keep the omarchy-* calling contracts
 - greetd + tuigreet replace SDDM (with upstream-style autologin into
@@ -32,6 +37,48 @@ The full Omarchy workflow with every pixel drawn by the CPU:
   Remote View) serves the live session over VNC via wayvnc/wlroots
   screencopy - fully CPU-side, ideal for the cloud-hosted use case.
   Localhost-only; reach it with `ssh -L 5901:127.0.0.1:5901 user@host`
+
+## Hyprland replaces sway (2026-08-31)
+
+sway was only ever a stand-in for a compositor that needed a GPU. It is
+gone. This fork's Hyprland (`cederikdotcom/Hyprland`, branch
+`pixman-renderer`, base v0.56.2) and aquamarine
+(`cederikdotcom/aquamarine`, branch `cpu-backend`, base v0.15.0) add a
+pixman software renderer, proven headless, nested and on a real DRM
+display in the i686 VM at 0.05 % idle CPU (see
+`docs/pixman-renderer/PROGRESS.md`). Carrying a substituted compositor
+was permanent repo drift against upstream; this ends it.
+
+What came back, verbatim from upstream: `config/hypr/` and
+`default/hypr/` (the whole Lua config layer, 58 files),
+`default/themed/hyprland.lua.tpl` and the five per-theme
+`hyprland.lua` files, `bin/omarchy-refresh-hyprland`,
+`bin/omarchy-restart-hyprctl`, the two Hyprland reload pacman hooks,
+`default/uwsm/` and `migrations/1787618700.sh`. What the fork still
+owns:
+
+- **Flat mode.** `default/hypr/looknfeel.lua` sets
+  `animations.enabled = false`; upstream already had rounding 0 and
+  blur and shadows off, so that is the whole flat-mode diff. The
+  renderer logs a warning naming any of these left on.
+- **Session entry.** `bin/omarchy-hyprland-launch` (replacing
+  `omarchy-hyprland-launch`) exports `HYPRLAND_RENDERER=pixman` and
+  `AQ_FORCE_ALLOCATOR=dumb`, sources upstream's own
+  `default/uwsm/env.d/10-omarchy` for the OMARCHY_PATH/PATH/TERMINAL
+  bootstrap, maps `/etc/vconsole.conf` onto `XKB_DEFAULT_*`, and pins
+  the systemd user bus. uwsm itself does not come back: it is not
+  packaged for archlinux32, and this fork logs in through greetd
+  rather than SDDM.
+- **Autostart.** `default/hypr/autostart.lua` still starts swaybg and
+  swayidle in place of the Quickshell wallpaper and hypridle, and
+  still skips udiskie, which the Lite package set does not carry.
+- **No preinstalled-app bindings.** `config/hypr/hyprland.lua` sets
+  upstream's own `omarchy_preinstalled_bindings = false`.
+- **Packages.** Hyprland and aquamarine are not in
+  `install/omarchy-base.packages`: they come from the fork build until
+  a fork package repo exists. The list carries the shared runtime they
+  link instead. On archlinux32 their hypr* dependencies and lua 5.5
+  have to be built too.
 
 ## Validated (cloud bench: i686 chroot + QEMU with IA32 OVMF firmware)
 
@@ -90,7 +137,7 @@ The full Omarchy workflow with every pixel drawn by the CPU:
 9. The greetd session wrapped sway in `dbus-run-session`, whose
    private bus split notifications and systemd user units onto
    different buses (notifications from any non-session shell failed).
-   greetd now launches `omarchy-sway-launch` for both sessions; the
+   greetd now launches `omarchy-hyprland-launch` for both sessions; the
    wrapper pins the systemd user bus and sets OMARCHY_PATH, PATH and
    the pixman renderer for all session children.
 10. 28 scripts launch apps via `uwsm-app`, but the port dropped the
@@ -160,7 +207,8 @@ i686 install too.
 ### Blocking a real MacBook install
 
 - **Fork package repo does not exist yet.** The two overrides -
-  fontconfig 2:2.18.3 (mandatory: sway will not start without it) and
+  fontconfig 2:2.18.3 (mandatory: the desktop's text stack will not
+  start without it) and
   neatvnc 0.8.1 (needed by wayvnc remote view) - are now published as
   GitHub release assets and installed with `pacman -U` per the runbook:
   https://github.com/cederikdotcom/omarchy32cpu/releases/tag/overrides-i686-20260831
@@ -175,8 +223,8 @@ i686 install too.
   populate, locale/vconsole/hostname/fstab, initramfs MODULES
   (ahci sd_mod i915 on the Mac), user creation. An IA32-bootable
   custom ISO is a later milestone.
-- **GMA 950 render floor untested.** sway/pixman is proven on i686 in
-  QEMU, but the real i945 KMS path needs the on-hardware spike
+- **GMA 950 render floor untested.** the pixman renderer is proven on
+  i686 in QEMU, but the real i945 KMS path needs the on-hardware spike
   (worklist 14). i3/X11 with the modesetting driver is the fallback.
 - **mbpfan and isight-firmware-tools** are not in archlinux32 repos;
   they must be built for the fork repo. Until then: no fan management
@@ -231,10 +279,9 @@ i686 install too.
 - Animations, blur, shadows, rounded corners, per-window opacity
   (pixman renders none of these)
 - Portal screen sharing / screencast (xdg-desktop-portal-wlr does not
-  support the pixman renderer); wf-recorder with CPU x264 works for
-  short local clips
-- Monitor mirroring (sway 1.8 has none); clamshell and output toggling
-  work
+  support the pixman renderer, and xdg-desktop-portal-hyprland is not
+  in archlinux32); wf-recorder with CPU x264 works for short local
+  clips
 - Hardware video decode and Vulkan (the GPU never had them)
 
 ### Downgraded to stubs (print a notice, exit 0)
@@ -244,14 +291,15 @@ i686 install too.
 - The Quickshell plugin/bar-widget system (`omarchy-menu-plugin`,
   bar widget IPC, panel apps: media source switch, speedtest, wifiqr,
   weather panels, idle status)
-- Hyprland-only bindings with no sway 1.8 equivalent: pseudotile,
-  maximize, universal copy/paste key injection, cursor zoom
 - `omarchy-bar` Quickshell config subcommands (use/reset/position/...)
+
+The Hyprland-only bindings the sway port had to drop (pseudotile,
+maximize, universal copy/paste key injection, cursor zoom) and monitor
+mirroring all come back with the compositor; cursor zoom is the one
+that will not, because the pixman renderer has no zoom stage.
 
 ### Behavioral differences from upstream
 
-- `omarchy-hyprland-monitor-watch` polls output topology every 2s
-  (sway 1.8 IPC has no output event)
 - Nightlight is wlsunset at a fixed 4000K toggle (hyprsunset had
   gradual control); state tracked in a file, wlsunset has no IPC
 - The color picker is grim+slurp based (`omarchy-capture-color`)

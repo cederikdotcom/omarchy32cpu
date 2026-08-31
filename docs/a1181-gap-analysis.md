@@ -1,9 +1,16 @@
 # Omarchy CPU: pure CPU-bound Omarchy, 32-bit first
 
+> **Historical.** This is the gap analysis that planned the port, written
+> before a CPU renderer for Hyprland existed. Its central decision - swap
+> Hyprland for sway - has been reversed: this fork now runs upstream
+> Hyprland on its own pixman renderer, and sway is deleted. Read it for the
+> reasoning and the hardware survey, not for what the fork ships. Current
+> state: `docs/RELEASE-NOTES.md`; renderer: `docs/pixman-renderer/`.
+
 Identity: this fork is **Omarchy CPU** - the Omarchy experience with no
 GPU dependence at all, and no preinstalled applications. Every pixel is
-drawn by the CPU: sway compositing via the wlroots pixman renderer,
-foot (CPU-rasterized terminal), waybar/fuzzel/mako/swaylock (cairo),
+drawn by the CPU: the compositor via a pixman renderer, foot
+(CPU-rasterized terminal), waybar/fuzzel/mako/swaylock (cairo),
 tuigreet (TTY). Mesa ships only so GL apps the user installs can fall
 back to llvmpipe.
 

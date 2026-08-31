@@ -10,19 +10,27 @@ A live omarchy32cpu session runs in a browser here:
 
 **https://omarchy32.cederik.com/vnc.html** - password `omarchy32view`
 
-That is the target experience: sway with the wlroots pixman renderer, waybar, fuzzel, mako, the Omarchy theme engine, every pixel drawn by the CPU. It is a development bench, so it may be down or mid-rebuild when you look. Do not report the demo being offline as a bug.
+That is the target experience: Hyprland on the pixman (CPU) renderer, waybar, fuzzel, mako, the Omarchy theme engine, every pixel drawn by the CPU. It is a development bench, so it may be down or mid-rebuild when you look. Do not report the demo being offline as a bug.
+
+## Read this first: the compositor changed
+
+Until now this fork substituted sway for Hyprland, because Hyprland needs GLES 3.0 and the target has no GPU. That reason is gone: this fork's [Hyprland](https://github.com/cederikdotcom/Hyprland/tree/pixman-renderer) and [aquamarine](https://github.com/cederikdotcom/aquamarine/tree/cpu-backend) branches add a pixman (CPU) renderer, and it composites headless, nested, and on a real DRM display in the i686 VM at 0.05 % idle CPU. So sway is deleted and the upstream Hyprland session is back.
+
+**Everything in "What works today" below was proven on the sway session and has to be proven again on Hyprland.** Treat the list as what the stack did, not as what it does. A report that one of those items no longer works IS useful right now.
+
+The renderer needs two environment variables, both set by `omarchy-hyprland-launch`: `HYPRLAND_RENDERER=pixman` picks the software renderer and `AQ_FORCE_ALLOCATOR=dumb` makes aquamarine allocate DRM dumb buffers. A stock Hyprland ignores both and then dies on the missing GLES 3.0, so the Hyprland and aquamarine binaries have to come from the fork build.
 
 ## What works today
 
 Everything in this list is evidence-backed. The detail, including every bug found and fixed while establishing it, is in [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md); the render-floor proofs and screenshots are in [`docs/pixman-renderer/`](docs/pixman-renderer/).
 
-- **The x86_64 path boots to a working desktop in a QEMU VM with no GPU.** 64-bit UEFI -> GRUB -> kernel -> greetd -> sway 1.12 with `WLR_RENDERER=pixman`, waybar, swaybg, mako, the fuzzel menu on `Super+Space` and foot on `Super+Return`. Screenshot: [`docs/pixman-renderer/x86_64-vm.png`](docs/pixman-renderer/x86_64-vm.png). Details in [`docs/runbooks/install-x86_64.md`](docs/runbooks/install-x86_64.md).
+- **The x86_64 path boots to a working desktop in a QEMU VM with no GPU.** 64-bit UEFI -> GRUB -> kernel -> greetd -> the compositor with the pixman renderer, waybar, swaybg, mako, the fuzzel menu on `Super+Space` and foot on `Super+Return`. Screenshot: [`docs/pixman-renderer/x86_64-vm.png`](docs/pixman-renderer/x86_64-vm.png). Details in [`docs/runbooks/install-x86_64.md`](docs/runbooks/install-x86_64.md).
 
-- **The boot chain**, rehearsed end to end in a QEMU VM with 32-bit UEFI firmware: firmware -> `BOOTIA32.EFI` -> GRUB -> i686 kernel -> greetd -> sway on the display.
+- **The boot chain**, rehearsed end to end in a QEMU VM with 32-bit UEFI firmware: firmware -> `BOOTIA32.EFI` -> GRUB -> i686 kernel -> greetd -> the compositor on the display.
 - **`omarchy-apply-system --install-user <user> --first-install`** runs to exit 0 in an i686 target chroot: config, hardware, greetd login and post-install phases.
-- **A full desktop session** under greetd autologin: sway + waybar + mako + swayidle + swaybg with the pixman renderer and the systemd user bus, zero failed systemd units.
-- **The theme engine.** All 22 themes render sway, waybar, mako and swaylock. Live theme switching re-renders and reloads all four.
-- **The ported CLI.** All 24 former `omarchy-hyprland-*` scripts plus `omarchy-compositor-ctl` were live-tested against a running sway session. `test/cli` 116/116, `test/shell` 155/155.
+- **A full desktop session** under greetd autologin: the compositor + waybar + mako + swayidle + swaybg with the pixman renderer and the systemd user bus, zero failed systemd units.
+- **The theme engine.** All 22 themes render the compositor, waybar, mako and swaylock. Live theme switching re-renders and reloads all four.
+- **The CLI.** All 24 `omarchy-hyprland-*` scripts plus `omarchy-compositor-ctl` were live-tested against a running session. They are being pointed back at `hyprctl` with the compositor swap.
 - **`omarchy-remote-view`** (wayvnc over wlroots screencopy) serves the live session over VNC on `127.0.0.1:5901`. This is the CPU-only stack's remote path and the reason a cloud instance is a usable test target.
 
 What has **not** been proven: any real GPU, any real display panel, any real wifi/audio/battery/suspend hardware, and any x86_64 machine. That is the entire point of this document.
@@ -36,13 +44,13 @@ Permanently absent on this stack:
 - No animations, blur, shadows, rounded corners or per-window opacity. The pixman renderer draws none of them.
 - No portal screen sharing or screencast. `xdg-desktop-portal-wlr` does not support the pixman renderer, so screen sharing in a browser or a video call will fail. This will not be fixed.
 - No hardware video decode and no Vulkan.
-- No monitor mirroring (sway 1.8 has none). Clamshell and output toggling do work.
+- Monitor mirroring is back with Hyprland but unverified on the pixman renderer; it was absent while the fork ran sway. Clamshell and output toggling do work.
 - No upstream plugin system. It is Quickshell QML; there is no Quickshell here.
 
 Known broken or missing right now:
 
 - **Screen recording is broken.** `omarchy-capture-screenrecording` still targets gpu-screen-recorder, which is not shipped. Screenshots (`grim`/`slurp`) do work.
-- **No browser is preinstalled**, and no application of any kind is. This fork ships a 55-package core and you install your own. On i686 the repo browsers are ancient (chromium 90, firefox 114).
+- **No browser is preinstalled**, and no application of any kind is. This fork ships a 78-package core and you install your own. On i686 the repo browsers are ancient (chromium 90, firefox 114).
 - **Optional capture and transcode tools are absent**: `omarchy-capture-qr` needs zbar, `omarchy-capture-text` needs tesseract, `omarchy-transcode*` needs ffmpeg and imagemagick. Those commands error until you install the tool.
 - **`omarchy-debug` does not work**: it calls `inxi`, which is not in the core package set. Use the commands under "Diagnostics" below instead.
 - **`omarchy-update` is untested and should be treated as broken.** The fork does not track upstream channels and has no package repo.
@@ -55,10 +63,10 @@ Known broken or missing right now:
 Work down this list. Partial reports are welcome - "it did not boot" is a useful report on its own.
 
 1. **Does it boot?** Firmware -> bootloader -> kernel. If it stops, say where.
-2. **Does greetd start?** You should reach either the sway desktop directly (autologin) or the tuigreet text greeter.
-3. **Does the sway session come up?** Bar, wallpaper, a terminal on `Super+Return`, the menu on `Super+Space`.
+2. **Does greetd start?** You should reach either the desktop directly (autologin) or the tuigreet text greeter.
+3. **Does the Hyprland session come up?** Bar, wallpaper, a terminal on `Super+Return`, the menu on `Super+Space`.
 4. **Which renderer are you actually on, and does the other one work?** This is the most valuable single data point we can get from you, and we have none of it. See "The renderer question" below.
-5. **Theme switching**: `omarchy-theme-set catppuccin`, then a few others. Do sway, waybar, mako and the lock screen all follow?
+5. **Theme switching**: `omarchy-theme-set catppuccin`, then a few others. Do the window borders, waybar, mako and the lock screen all follow?
 6. **The menu**: `Super+Space`. Does it open, navigate, and launch things?
 7. **Suspend and resume**: close the lid, or `systemctl suspend`. Does it come back with a working display and input?
 8. **Wifi**: `nmtui` or the menu's wifi entry.
@@ -69,19 +77,19 @@ Work down this list. Partial reports are welcome - "it did not boot" is a useful
 
 ### The renderer question
 
-The fork forces `WLR_RENDERER=pixman` in `omarchy-sway-launch` because its first target has a GPU that cannot serve GLES. On a machine with a normal GPU that is leaving performance on the floor - sway's own GLES2 renderer should work and be hardware-accelerated. **We have never tested that, and we would like to know.**
+The fork sets `HYPRLAND_RENDERER=pixman` in `omarchy-hyprland-launch` because its first target has a GPU that cannot serve GLES. On a machine with a normal GPU that is leaving performance on the floor - Hyprland's own GL renderer should work, be hardware-accelerated, and bring back animations, blur, shadows and rounded corners. **We have never tested that on this build, and we would like to know.**
 
 If you have a real GPU, please try both:
 
 ```bash
 # What you get by default:
-WLR_RENDERER=pixman sway
+HYPRLAND_RENDERER=pixman AQ_FORCE_ALLOCATOR=dumb Hyprland
 
-# What we want to know about - sway's GLES2 renderer, hardware-accelerated:
-WLR_RENDERER=gles2 sway
+# What we want to know about - Hyprland's GL renderer, hardware-accelerated:
+HYPRLAND_RENDERER=gl Hyprland
 ```
 
-Report which one you ran, whether GLES2 came up at all, and whether it felt faster. If both fail and you fell back to i3 on X11 with the modesetting driver, say that too - it is the documented fallback and we want to know how often people need it.
+Report which one you ran, whether the GL renderer came up at all, and whether it felt faster. If both fail and you fell back to i3 on X11 with the modesetting driver, say that too - it is the documented fallback and we want to know how often people need it.
 
 ## Diagnostics to attach
 
@@ -89,12 +97,12 @@ Run these and paste the output into the report. None of them need anything the c
 
 ```bash
 # Compositor and version
-swaymsg -t get_version
-swaymsg -t get_outputs
+hyprctl version
+hyprctl monitors
 omarchy-version
 
 # What the session environment actually is
-env | grep -E 'WLR_|XDG_|WAYLAND'
+env | grep -E 'HYPRLAND_|AQ_|WLR_|XDG_|WAYLAND'
 
 # Graphics hardware, verbatim - this is the field we most need
 lspci -nn | grep -i vga
@@ -103,8 +111,8 @@ ls -l /dev/dri/
 # Login chain
 journalctl -b -u greetd --no-pager | tail -50
 
-# Config validity (works without a running session)
-WLR_BACKENDS=headless sway -C
+# The renderer the session actually selected, and its flat-mode warnings
+grep -iE 'pixman|renderer' "$XDG_RUNTIME_DIR"/hypr/*/hyprland.log | head -20
 
 # Kernel modesetting complaints
 dmesg | grep -iE 'drm|i915|amdgpu|nouveau' | tail -30
@@ -116,7 +124,7 @@ systemctl --user --failed
 
 If the desktop comes up at all but you are working over a network, `omarchy-remote-view on` starts wayvnc on `127.0.0.1:5901`; reach it with `ssh -L 5901:127.0.0.1:5901 <user>@<host>` and point a VNC client at `localhost:5901`. It binds localhost only, and the default ufw posture denies incoming anyway.
 
-`hyprctl` does not exist here - Hyprland is gone. Its replacement is `swaymsg`, and `omarchy-compositor-ctl` is the shim the fork's own scripts call.
+`hyprctl` is back: this is real Hyprland, only with a different renderer. `omarchy-compositor-ctl` is the fork's own thin wrapper over it.
 
 ## Install paths
 
