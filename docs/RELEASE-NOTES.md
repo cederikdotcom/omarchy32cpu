@@ -5,8 +5,13 @@ archlinux32 i686. Based on upstream Omarchy v4.0.1 "Quattro". First
 target hardware: 2006 Apple MacBook1,1 (A1181, EMC 2092).
 
 Status: pre-release. Everything below reflects the state validated on
-the cloud test bench on 2026-08-30. The port has not yet touched the
-real MacBook.
+the cloud test bench on 2026-08-30, plus the x86_64 bring-up on
+2026-08-31. The port has not yet touched the real MacBook, or any real
+hardware at all.
+
+The CPU-only core is architecture-independent, and x86_64 is where most
+testing will happen: see `TESTING.md` and
+`docs/runbooks/install-x86_64.md`.
 
 ## What this release is
 
@@ -117,17 +122,51 @@ The full Omarchy workflow with every pixel drawn by the CPU:
    toggle-input-device state, two portable-awk bugs, an omarchy-menu
    field-separator bug that silently dropped menu guards).
 
+## Fixed during the x86_64 bring-up (2026-08-31)
+
+Found by running the same procedure on official Arch x86_64. All four
+were fork-wide bugs, not x86_64-specific ones; the first three hit the
+i686 install too.
+
+18. `omarchy-provision-user` ended by hard-setting Chromium as the
+   default browser and HEY as the mailto handler. This fork ships no
+   applications, `xdg-settings` exits non-zero on a missing .desktop,
+   and the script runs under `set -e` - so the documented user stage
+   aborted before `omarchy-done mark finalize-user`. Both defaults are
+   now conditional on the handler existing.
+19. `Super+Return` did nothing. `omarchy-launch-terminal` execs
+   `xdg-terminal-exec`, which is an AUR package and is in neither the
+   core package set nor the archlinux32 repos. It now falls back to
+   foot, which the core does ship, and `$TERMINAL` follows the same
+   rule.
+20. The core package list carried no fonts at all, so the menu, the bar
+   and the notifications drew their glyphs as tofu boxes and foot could
+   not find the `JetBrainsMono Nerd Font` its config asks for. Added
+   `noto-fonts`, `noto-fonts-emoji` and `ttf-jetbrains-mono-nerd`; all
+   three exist in both archlinux32 and official Arch. The Omarchy icon
+   font (`default/fonts/omarchy/omarchy.ttf`) is a repo asset that
+   upstream's package installs system-wide and the fork never installed
+   anywhere; a new `install/user/fonts.sh` seeds it per user.
+21. `install/post-install/pacman.sh` unconditionally overwrote
+   /etc/pacman.conf and the mirrorlist with the archlinux32 configs
+   (`Architecture = i686`, mirror.archlinux32.org). On x86_64 that
+   destroyed pacman. It now applies them only when `uname -m` reports
+   i686. `omarchy-refresh-grub` had the same problem in the other
+   direction - it hardcoded `--target=i386-efi` / `BOOTIA32.EFI` - and
+   now picks the target from `uname -m`.
+
 ## Missing / open items
 
 ### Blocking a real MacBook install
 
-- **Fork package repo does not exist yet.** Two overrides already
-  exist and need hosting: fontconfig 2:2.18.3 (mandatory - sway will
-  not start without it) and neatvnc 0.8.1 (needed by wayvnc remote
-  view). Future i686 rebuilds (mbpfan, isight-firmware-tools, drift
-  fixes) join them. All need a hosted pacman repo wired into
-  default/pacman/*.conf. Until then the
-  override installs manually per the runbook.
+- **Fork package repo does not exist yet.** The two overrides -
+  fontconfig 2:2.18.3 (mandatory: sway will not start without it) and
+  neatvnc 0.8.1 (needed by wayvnc remote view) - are now published as
+  GitHub release assets and installed with `pacman -U` per the runbook:
+  https://github.com/cederikdotcom/omarchy32cpu/releases/tag/overrides-i686-20260831
+  That is a stopgap, not a repo. Future i686 rebuilds (mbpfan,
+  isight-firmware-tools, drift fixes) still want a real hosted pacman
+  repo wired into default/pacman/*.conf.
 - **No install ISO.** The install path is: boot the archlinux32 ISO,
   partition, pacstrap the core list, put the repo at /usr/share/omarchy,
   create the user, run omarchy-apply-system. The ISO-layer duties are
@@ -157,6 +196,16 @@ The full Omarchy workflow with every pixel drawn by the CPU:
 - **Storage/FDE polish** (worklist 11): `omarchy-hibernation-setup`
   (btrfs swapfile) should be dropped; `omarchy-drive-password` argon2id
   cost is not yet retuned for a 2 GB Core Duo.
+- **The foot theme template cannot satisfy both foot versions.** foot
+  1.13 (archlinux32) requires `[colors]` and rejects `[colors-dark]`;
+  foot 1.27 (Arch x86_64) deprecates `[colors]` and asks for
+  `[colors-dark]`, and rejects `[cursor].color` outright. The `[cursor]`
+  section was dropped (it was a hard error on the newer foot), so the
+  cursor now uses reversed foreground/background everywhere. The
+  remaining `[colors]` deprecation warnings - about 20 lines per
+  terminal launch on x86_64 - are cosmetic and unfixed. A correct fix
+  renders the section name from the installed foot version and the
+  theme's light/dark mode.
 - **Screen recording is currently broken**: `omarchy-capture-screenrecording`
   still targets gpu-screen-recorder (not shipped, and it has no
   encoder on this GPU anyway). The planned wf-recorder (CPU x264) swap
@@ -221,6 +270,11 @@ The full Omarchy workflow with every pixel drawn by the CPU:
 
 ## Install
 
-See docs/runbooks/a1181-install.md (the authoritative procedure,
-including the manual ISO-layer duties above) and
-docs/runbooks/testbench.md for the QEMU rehearsal environment.
+- `docs/runbooks/install-x86_64.md` - the x86_64 path: no override
+  packages, ordinary UEFI, and a copy-pasteable QEMU line for a VM with
+  no GPU. Rehearsed end to end 2026-08-31.
+- `docs/runbooks/a1181-install.md` - the authoritative i686 procedure,
+  including the manual ISO-layer duties above and the two override
+  packages.
+- `docs/runbooks/testbench.md` - the QEMU rehearsal environment.
+- `TESTING.md` - what to test and how to report it.
