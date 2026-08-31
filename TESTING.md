@@ -16,7 +16,7 @@ That is the target experience: Hyprland on the pixman (CPU) renderer, waybar, fu
 
 Until now this fork substituted sway for Hyprland, because Hyprland needs GLES 3.0 and the target has no GPU. That reason is gone: this fork's [Hyprland](https://github.com/cederikdotcom/Hyprland/tree/pixman-renderer) and [aquamarine](https://github.com/cederikdotcom/aquamarine/tree/cpu-backend) branches add a pixman (CPU) renderer, and it composites headless, nested, and on a real DRM display in the i686 VM at 0.05 % idle CPU. So sway is deleted and the upstream Hyprland session is back.
 
-**Everything in "What works today" below was proven on the sway session and has to be proven again on Hyprland.** Treat the list as what the stack did, not as what it does. A report that one of those items no longer works IS useful right now.
+**"What works today" below was proven on the sway session.** On **x86_64 it has been proven again on Hyprland**, on 2026-08-31: a VM installed from this tree boots, greetd starts the session itself, and `hyprctl systeminfo` says `Renderer: pixman (software)`, with waybar, the menu, the keybindings and theme switching all working. **On i686 it has not been re-proven yet.** So on the MacBook path, treat the list as what the stack did rather than what it does, and a report that one of those items no longer works is especially useful.
 
 The renderer needs two environment variables, both set by `omarchy-hyprland-launch`: `HYPRLAND_RENDERER=pixman` picks the software renderer and `AQ_FORCE_ALLOCATOR=dumb` makes aquamarine allocate DRM dumb buffers. A stock Hyprland ignores both and then dies on the missing GLES 3.0, so the Hyprland and aquamarine binaries have to come from the fork build.
 
@@ -30,7 +30,7 @@ Everything in this list is evidence-backed. The detail, including every bug foun
 - **`omarchy-apply-system --install-user <user> --first-install`** runs to exit 0 in an i686 target chroot: config, hardware, greetd login and post-install phases.
 - **A full desktop session** under greetd autologin: the compositor + waybar + mako + swayidle + swaybg with the pixman renderer and the systemd user bus, zero failed systemd units.
 - **The theme engine.** All 22 themes render the compositor, waybar, mako and swaylock. Live theme switching re-renders and reloads all four.
-- **The CLI.** All 24 `omarchy-hyprland-*` scripts plus `omarchy-compositor-ctl` were live-tested against a running session. They are being pointed back at `hyprctl` with the compositor swap.
+- **The CLI.** All 24 `omarchy-hyprland-*` scripts were live-tested against a running session. They are upstream's `hyprctl` versions again since the compositor swap; `omarchy-compositor-ctl`, the shim that stood between them and sway, is deleted.
 - **`omarchy-remote-view`** (wayvnc over wlroots screencopy) serves the live session over VNC on `127.0.0.1:5901`. This is the CPU-only stack's remote path and the reason a cloud instance is a usable test target.
 
 What has **not** been proven: any real GPU, any real display panel, any real wifi/audio/battery/suspend hardware, and any x86_64 machine. That is the entire point of this document.
@@ -56,6 +56,9 @@ Known broken or missing right now:
 - **`omarchy-update` is untested and should be treated as broken.** The fork does not track upstream channels and has no package repo.
 - Several commands are deliberate stubs that print a notice and exit 0 (window transparency toggle, cursor zoom, the plugin and bar-widget system, `omarchy-bar` config subcommands). The full list is in the release notes.
 - `systemctl restart greetd` lands on the tuigreet greeter, not back in the autologin session. That is greetd semantics, not a bug. Reboot or log in through tuigreet.
+- **A login notification says `hyprland-qtutils` is not installed.** It is not, on purpose: it is Qt6/QML and needs GL, the same blocker that keeps the Quickshell desktop out. Hyprland uses it only for a few of its own dialogs. Cosmetic.
+- **foot prints about 20 `deprecated: [colors]` lines on every launch on x86_64.** foot 1.27 wants `[colors-dark]` where foot 1.13 on archlinux32 requires `[colors]`, and one theme template has to serve both. The colours apply correctly.
+- If you pick a session from the greeter's menu, pick **Omarchy**. The Hyprland build installs its own `Hyprland` entries that do not set the pixman renderer, and those give you a black screen on a machine with no GPU.
 - On i686 only: no fan daemon (mbpfan) and no webcam (isight-firmware-tools); neither is in the archlinux32 repos.
 
 ## What to test and report
@@ -111,8 +114,11 @@ ls -l /dev/dri/
 # Login chain
 journalctl -b -u greetd --no-pager | tail -50
 
-# The renderer the session actually selected, and its flat-mode warnings
-grep -iE 'pixman|renderer' "$XDG_RUNTIME_DIR"/hypr/*/hyprland.log | head -20
+# The renderer the session actually selected. This is the important one:
+# it should say "Renderer: pixman (software)". Do not grep the compositor's
+# log file for this - Hyprland ships with debug:disable_logs on, so
+# $XDG_RUNTIME_DIR/hypr/<sig>/hyprland.log is empty and tells you nothing.
+hyprctl systeminfo | grep -iE 'renderer|backend|GPU'
 
 # Kernel modesetting complaints
 dmesg | grep -iE 'drm|i915|amdgpu|nouveau' | tail -30
@@ -124,7 +130,7 @@ systemctl --user --failed
 
 If the desktop comes up at all but you are working over a network, `omarchy-remote-view on` starts wayvnc on `127.0.0.1:5901`; reach it with `ssh -L 5901:127.0.0.1:5901 <user>@<host>` and point a VNC client at `localhost:5901`. It binds localhost only, and the default ufw posture denies incoming anyway.
 
-`hyprctl` is back: this is real Hyprland, only with a different renderer. `omarchy-compositor-ctl` is the fork's own thin wrapper over it.
+`hyprctl` is back, and everything in the wiki that uses it applies: this is real Hyprland, only with a different renderer.
 
 ## Install paths
 
