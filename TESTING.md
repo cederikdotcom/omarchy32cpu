@@ -29,9 +29,13 @@ Everything in this list is evidence-backed. The detail, including every bug foun
 - **The boot chain**, rehearsed end to end in a QEMU VM with 32-bit UEFI firmware: firmware -> `BOOTIA32.EFI` -> GRUB -> i686 kernel -> greetd -> the compositor on the display.
 - **`omarchy-apply-system --install-user <user> --first-install`** runs to exit 0 in an i686 target chroot: config, hardware, greetd login and post-install phases.
 - **A full desktop session** under greetd autologin: the compositor + waybar + mako + swayidle + swaybg with the pixman renderer and the systemd user bus, zero failed systemd units.
-- **The theme engine.** All 22 themes render the compositor, waybar, mako and swaylock. Live theme switching re-renders and reloads all four.
+- **The theme engine.** All 22 themes render templates for the compositor, waybar, mako and swaylock. A live theme switch is confirmed to re-render every template, reload the compositor's colours, and change the wallpaper. Whether waybar and mako visibly repaint without a restart is **not** confirmed - tell us if they do not.
 - **The CLI.** All 24 `omarchy-hyprland-*` scripts were live-tested against a running session. They are upstream's `hyprctl` versions again since the compositor swap; `omarchy-compositor-ctl`, the shim that stood between them and sway, is deleted.
 - **`omarchy-remote-view`** (wayvnc over wlroots screencopy) serves the live session over VNC on `127.0.0.1:5901`. This is the CPU-only stack's remote path and the reason a cloud instance is a usable test target.
+
+### Before you report a black screen
+
+The session locks itself after five minutes idle (`swayidle` starting `swaylock`), and the lock screen is a **single flat colour** filling the display with no indicator until you press a key. On a VM you are watching over VNC, or a machine you left alone while reading this, that is indistinguishable from a crash - it fooled us for an afternoon. Press a key first. `pgrep -af swaylock` settles it in one command. If you are running unattended tests longer than five minutes, stop swayidle.
 
 What has **not** been proven: any real GPU, any real display panel, any real wifi/audio/battery/suspend hardware, and any x86_64 machine. That is the entire point of this document.
 

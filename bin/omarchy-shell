@@ -152,6 +152,18 @@ case "$target $method" in
     fi
     exit 0
     ;;
+  "background themeTransition")
+    # Quickshell cross-faded between wallpapers; swaybg cannot, so the
+    # transition collapses to setting the destination. Arguments are
+    # (old-snapshot, new-snapshot, new-background, colors, shell) - only the
+    # third is a lasting path, the snapshots are temporary copies.
+    background="${3:-}"
+    if [[ -f $background ]] && omarchy-cmd-present swaybg; then
+      pkill -x swaybg 2>/dev/null || true
+      setsid -f swaybg -i "$background" -m fill >/dev/null 2>&1
+    fi
+    exit 0
+    ;;
   "background set")
     background="${1:-}"
     [[ -f $background ]] || fail "background not found: $background"
