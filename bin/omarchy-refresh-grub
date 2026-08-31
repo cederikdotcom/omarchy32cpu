@@ -3,13 +3,22 @@
 # omarchy:summary=Rebuild the GRUB config and install the bootloader when it is missing.
 # omarchy:requires-sudo=true
 
-# The 32-bit Apple EFI boots the removable fallback path, so GRUB lives at
-# /boot/EFI/BOOT/BOOTIA32.EFI rather than in an NVRAM boot entry. Install
-# before mkconfig: on a first run grub-install also creates /boot/grub,
+# GRUB goes in the removable fallback path (/boot/EFI/BOOT/BOOT*.EFI) rather
+# than an NVRAM boot entry: the 32-bit Apple EFI on the MacBook1,1 boots that
+# path, and it needs no efibootmgr or NVRAM write anywhere else either.
+# Install before mkconfig: on a first run grub-install also creates /boot/grub,
 # which grub-mkconfig needs to exist.
-if ! sudo test -f /boot/EFI/BOOT/BOOTIA32.EFI; then
-  echo "Installing GRUB as BOOTIA32.EFI"
-  sudo grub-install --target=i386-efi --efi-directory=/boot --removable --no-nvram
+if [[ $(uname -m) == i?86 ]]; then
+  grub_target=i386-efi
+  efi_stub=BOOTIA32.EFI
+else
+  grub_target=x86_64-efi
+  efi_stub=BOOTX64.EFI
+fi
+
+if ! sudo test -f "/boot/EFI/BOOT/$efi_stub"; then
+  echo "Installing GRUB as $efi_stub"
+  sudo grub-install --target="$grub_target" --efi-directory=/boot --removable --no-nvram
 fi
 
 echo "Rebuilding GRUB config"
