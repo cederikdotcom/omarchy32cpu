@@ -28,6 +28,8 @@ linux-firmware
 mako
 neovim
 networkmanager
+noto-fonts
+noto-fonts-emoji
 pipewire
 pipewire-pulse
 plocate
@@ -44,6 +46,7 @@ swaybg
 swayidle
 swaylock
 tmux
+ttf-jetbrains-mono-nerd
 ufw
 upower
 waybar

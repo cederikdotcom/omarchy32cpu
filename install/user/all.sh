@@ -1,3 +1,4 @@
+run_logged "$OMARCHY_INSTALL/user/fonts.sh"
 run_logged "$OMARCHY_INSTALL/user/theme.sh"
 run_logged "$OMARCHY_INSTALL/user/git.sh"
 run_logged "$OMARCHY_INSTALL/user/xcompose.sh"
