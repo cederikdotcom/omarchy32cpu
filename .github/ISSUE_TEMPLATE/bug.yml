@@ -1,17 +1,28 @@
 name: Bug
-description: Report a validated bug -- NOT FOR SUPPORT REQUESTS
+description: Report a bug in omarchy32cpu that is not already a known limitation
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Remember: Omarchy is an open source gift, not a product you bought from a vendor
+        Before filing: check the "What is expected to be broken or absent" section of
+        [TESTING.md](https://github.com/cederikdotcom/omarchy32cpu/blob/main/TESTING.md).
+        No screen sharing, no animations, no hardware video decode, no plugin system,
+        broken screen recording and no preinstalled applications are all known and
+        documented, most of them permanently.
+
+        If you are reporting how the fork behaved on a particular machine, use the
+        hardware report form instead - it asks for the right things.
+
+        This is an unaffiliated fork of Omarchy by one person, not a product.
+        Upstream's support channels do not cover it.
 
   - type: input
     id: system-details
     attributes:
       label: System details
-      placeholder: e.g. AMD 9950X, NVIDIA 5090, Omarchy 2.1.0
+      description: CPU, GPU, architecture, and which install runbook you followed.
+      placeholder: e.g. i5-2520M, Intel HD 3000, x86_64, install-x86_64.md
     validations:
       required: true
 
@@ -19,6 +30,11 @@ body:
     id: steps
     attributes:
       label: What's wrong?
-      description: Describe the issue, include steps to recreate it if possible, and attach the output of `omarchy-debug` if possible
+      description: |
+        Describe the issue and how to recreate it. Attach the relevant diagnostics from
+        the "Diagnostics to attach" section of TESTING.md. Note that `omarchy-debug`
+        does not work in this fork - it needs `inxi`, which the core package set does
+        not install.
+      render: shell
     validations:
       required: true

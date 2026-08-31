@@ -1,8 +1,8 @@
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
-  - name: Suggestion
-    url: https://github.com/basecamp/omarchy/discussions/categories/suggestions
-    about: Suggest a new feature, change to existing feature, or other ideas in Discussions.
-  - name: Support
-    url: https://omarchy.org/discord
-    about: Need help? Join our Discord community for support with any issues. GitHub issues should be used for verified bugs only.
+  - name: Read this first
+    url: https://github.com/cederikdotcom/omarchy32cpu/blob/main/TESTING.md
+    about: What is validated, what is known broken or permanently absent, and what to test. Most reports are answered here.
+  - name: Upstream Omarchy
+    url: https://omarchy.org
+    about: This is an unaffiliated fork. Upstream's Discord and issue tracker do not cover it - do not send omarchy32cpu problems there, and do not send upstream Omarchy problems here.

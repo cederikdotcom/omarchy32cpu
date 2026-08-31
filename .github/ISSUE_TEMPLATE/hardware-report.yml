@@ -1,0 +1,123 @@
+name: Hardware report
+description: Tell us what happened when you ran omarchy32cpu on your machine
+title: "[hardware] "
+labels: [hardware-report]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the report the project most wants. omarchy32cpu has only ever
+        run in VMs and chroots, so anything you can say about real hardware is
+        new information - including "it did not boot".
+
+        Read [TESTING.md](https://github.com/cederikdotcom/omarchy32cpu/blob/main/TESTING.md)
+        first for the list of things that are already known to be broken or
+        absent. Please do not report those.
+
+        One report per machine.
+
+  - type: input
+    id: machine
+    attributes:
+      label: Machine
+      description: Make, model and year. For a VM, say so and name the hypervisor.
+      placeholder: e.g. ThinkPad X220, 2011 / QEMU 9.1 VM on a Ryzen host
+    validations:
+      required: true
+
+  - type: input
+    id: cpu-ram
+    attributes:
+      label: CPU and RAM
+      placeholder: e.g. i5-2520M, 8 GB
+    validations:
+      required: true
+
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU
+      description: Paste the output of `lspci -nn | grep -i vga` verbatim.
+      placeholder: "00:02.0 VGA compatible controller [0300]: Intel Corporation 2nd Generation Core Processor Family Integrated Graphics Controller [8086:0126] (rev 09)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: arch
+    attributes:
+      label: Architecture
+      options:
+        - x86_64
+        - i686
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-path
+    attributes:
+      label: Install path used
+      options:
+        - docs/runbooks/install-x86_64.md
+        - docs/runbooks/install-x86_64.md, QEMU VM section
+        - docs/runbooks/a1181-install.md
+        - Something else (describe below)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: firmware
+    attributes:
+      label: Boot firmware
+      options:
+        - UEFI (64-bit)
+        - UEFI (32-bit, e.g. old Apple or Bay Trail)
+        - BIOS / CSM
+        - Not sure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: worked
+    attributes:
+      label: What worked
+      description: Tick what you actually saw working. Leave the rest blank; blank means "no" or "did not test", and you can say which below.
+      options:
+        - label: Boots (bootloader to kernel)
+        - label: greetd starts (autologin session or the tuigreet greeter)
+        - label: sway session comes up with a bar and a wallpaper
+        - label: Theme switching (`omarchy-theme-set <name>`)
+        - label: Menu opens (`Super+Space`)
+        - label: Wifi
+        - label: Audio
+        - label: Suspend and resume
+        - label: Brightness keys
+        - label: Webcam
+
+  - type: dropdown
+    id: renderer
+    attributes:
+      label: Renderer
+      description: See "The renderer question" in TESTING.md. If you have a real GPU, please try `WLR_RENDERER=gles2 sway` as well - nobody has yet.
+      options:
+        - pixman (the default) - worked
+        - pixman - failed
+        - gles2, hardware-accelerated - worked
+        - gles2 - failed
+        - Both worked
+        - Fell back to i3 on X11
+        - Did not get far enough to tell
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened
+      description: |
+        What broke, where it stopped, anything surprising. Paste diagnostics from
+        the "Diagnostics to attach" section of TESTING.md - at minimum
+        `swaymsg -t get_version`, `journalctl -b -u greetd`, and
+        `dmesg | grep -iE 'drm|i915|amdgpu|nouveau'` if the display misbehaved.
+      render: shell
+    validations:
+      required: true
