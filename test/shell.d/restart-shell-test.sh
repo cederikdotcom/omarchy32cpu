@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
 # The Omarchy CPU shell is waybar plus mako. A restart stops both, respawns
-# them through sway (so they inherit the session environment, not the
+# them through Hyprland (so they inherit the session environment, not the
 # caller's), and only reports success once the bar answers again.
 
 test_tmp=$(mktemp -d)
@@ -29,10 +29,10 @@ cat >"$fake_bin/pkill" <<'SH'
 printf 'pkill %s\n' "$*" >>"$OMARCHY_TEST_LOG"
 SH
 
-cat >"$fake_bin/swaymsg" <<'SH'
+cat >"$fake_bin/hyprctl" <<'SH'
 #!/bin/bash
 [[ ${OMARCHY_TEST_COMPOSITOR_GONE:-0} == 1 ]] && exit 1
-printf 'swaymsg [%s] %s\n' "${SWAYSOCK:-}" "$*" >>"$OMARCHY_TEST_LOG"
+printf 'hyprctl [%s] %s\n' "${HYPRLAND_INSTANCE_SIGNATURE:-}" "$*" >>"$OMARCHY_TEST_LOG"
 SH
 
 cat >"$fake_bin/omarchy-launch-shell" <<'SH'
@@ -51,17 +51,19 @@ run_restart() {
     "$@"
 }
 
-# A caller from outside the session (ssh, TTY) has no SWAYSOCK; the restart
-# derives it from the newest sway IPC socket in the runtime dir.
-touch "$runtime_dir/sway-ipc.1000.4242.sock"
+# A caller from outside the session (ssh, TTY) has no HYPRLAND_INSTANCE_SIGNATURE;
+# the restart recovers it from the newest instance directory under $XDG_RUNTIME_DIR/hypr.
+mkdir -p "$runtime_dir/hypr/older_instance" "$runtime_dir/hypr/newest_instance"
+touch -d '2 hours ago' "$runtime_dir/hypr/older_instance"
+touch "$runtime_dir/hypr/newest_instance"
 
 : >"$restart_log"
-run_restart env -u SWAYSOCK "$ROOT/bin/omarchy-restart-shell" ||
+run_restart env -u HYPRLAND_INSTANCE_SIGNATURE "$ROOT/bin/omarchy-restart-shell" ||
   fail "restart succeeds when the bar comes back"
 grep -Fqx 'bar stop' "$restart_log" || fail "restart stops the bar"
 grep -Fq 'pkill -x mako' "$restart_log" || fail "restart stops mako"
-grep -Fq "swaymsg [$runtime_dir/sway-ipc.1000.4242.sock] exec omarchy-launch-shell" "$restart_log" ||
-  fail "restart relaunches the shell through sway with the recovered socket" "$(<"$restart_log")"
+grep -Fq 'hyprctl [newest_instance] dispatch hl.dsp.exec_cmd("omarchy-launch-shell")' "$restart_log" ||
+  fail "restart relaunches the shell through Hyprland with the recovered signature" "$(<"$restart_log")"
 grep -Fqx 'bar status' "$restart_log" || fail "restart waits for the bar to answer"
 if grep -Fqx 'launch-shell direct' "$restart_log"; then
   fail "restart prefers the compositor spawn over a direct launch"
