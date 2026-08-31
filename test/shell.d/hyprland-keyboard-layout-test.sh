@@ -2,9 +2,10 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/base-test.sh"
 
-# The Hyprland-era default/hypr/input.lua keyboard logic now lives in
-# bin/omarchy-sway-launch, which exports XKB_DEFAULT_* before exec'ing sway.
-# Stub sway to capture what the session hands the compositor.
+# default/hypr/input.lua sets the keyboard layout through hyprctl, which is too
+# late for a fresh install with a non-US keymap. bin/omarchy-hyprland-launch
+# exports XKB_DEFAULT_* from /etc/vconsole.conf before exec'ing the compositor.
+# Stub Hyprland to capture what the session hands it.
 
 test_tmp=$(mktemp -d)
 trap 'rm -rf "$test_tmp"' EXIT
@@ -12,11 +13,11 @@ trap 'rm -rf "$test_tmp"' EXIT
 stub_bin="$test_tmp/bin"
 mkdir -p "$stub_bin"
 
-cat >"$stub_bin/sway" <<'SH'
+cat >"$stub_bin/Hyprland" <<'SH'
 #!/bin/bash
 printf '[%s] [%s] [%s]\n' "$XKB_DEFAULT_LAYOUT" "$XKB_DEFAULT_VARIANT" "$XKB_DEFAULT_OPTIONS"
 SH
-chmod +x "$stub_bin/sway"
+chmod +x "$stub_bin/Hyprland"
 
 resolved_input() {
   local vconsole="${1-__missing__}"
@@ -29,7 +30,7 @@ resolved_input() {
   fi
 
   PATH="$stub_bin:$PATH" OMARCHY_VCONSOLE_CONF="$conf" HOME="$test_tmp" \
-    bash "$ROOT/bin/omarchy-sway-launch"
+    bash "$ROOT/bin/omarchy-hyprland-launch" 2>/dev/null
 }
 
 assert_input() {

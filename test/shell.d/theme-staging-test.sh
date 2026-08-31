@@ -76,7 +76,6 @@ printf '[terminal.shell]\nprogram = "%s"\n' "$marker" >"$hostile/alacritty.toml"
 printf 'shell = "%s"\n' "$marker" >"$hostile/foot.ini"
 printf 'command = "%s"\n' "$marker" >"$hostile/ghostty.conf"
 printf 'hl.env("GUM_INPUT_PROMPT", "%s")\n' "$marker" >"$hostile/gum_env.lua"
-printf 'exec %s\n' "$marker" >"$hostile/sway-colors"
 printf 'on-notify=exec %s\n' "$marker" >"$hostile/mako.ini"
 printf -- '--image=%s\n' "$marker" >"$hostile/swaylock.args"
 printf '/* %s */ @define-color background #000000;\n' "$marker" >"$hostile/waybar.css"
@@ -109,14 +108,10 @@ assert_not_staged .git "the clone's own git directory is never staged"
 
 # These run code, so the theme's versions must lose to Omarchy's generated ones
 # rather than merely be absent.
-for generated in neovim.lua gum_env.lua kitty.conf alacritty.toml foot.ini ghostty.conf sway-colors mako.ini swaylock.args; do
+for generated in neovim.lua gum_env.lua kitty.conf alacritty.toml foot.ini ghostty.conf hyprland.lua mako.ini swaylock.args; do
   assert_staged "$generated" "$generated is generated from Omarchy's template"
   assert_no_marker "$generated" "an installed theme cannot supply $generated"
 done
-
-# No template generates hyprland.lua any more (the Lite fork runs sway), and
-# an installed theme's copy is still refused like any other Lua.
-assert_not_staged hyprland.lua "an installed theme's hyprland.lua is not staged"
 
 # Colour is kept, including a file Omarchy would otherwise have generated.
 assert_staged shell.toml "shell.toml is staged"
@@ -179,7 +174,8 @@ printf 'os.execute("%s")\n' "$marker" >"$themes/tokyo-night/hyprland.lua"
 
 set_theme "Tokyo Night" || fail "omarchy-theme-set applies a stock theme with a user overlay"
 grep -q '#abcdef' "$(staged colors.toml)" || fail "a user overlay still replaces the stock palette"
-assert_not_staged hyprland.lua "a user overlay cannot add Lua to a stock theme"
+assert_staged hyprland.lua "the stock theme's hyprland.lua is still generated"
+assert_no_marker hyprland.lua "a user overlay cannot add Lua to a stock theme"
 
 pass "an overlay on a stock theme repaints it without adding code"
 
@@ -216,7 +212,7 @@ pass "a theme name cannot climb out of the theme directories"
 # A denylist is only correct while someone adding a template classifies what it
 # generates. Every generated theme file is either denied to an installed theme or
 # recorded here as carrying colour, so a new template fails until it is placed.
-denied=(alacritty.toml foot.ini ghostty.conf gum_env.lua kitty.conf mako.ini neovim.lua sway-colors swaylock.args vscode.json)
+denied=(alacritty.toml foot.ini ghostty.conf gum_env.lua hyprland.lua kitty.conf mako.ini neovim.lua swaylock.args vscode.json)
 colour_only=(btop.theme chromium.theme claude.json helix.toml keyboard.rgb obsidian.css pi.json shell.toml vscode-theme.json waybar.css)
 
 for tpl in "$ROOT"/default/themed/*.tpl; do

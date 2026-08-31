@@ -34,19 +34,29 @@ pass "default menu definition is valid JSONC"
 jq empty "$ROOT/default/omarchy/emojis.json"
 pass "default emoji catalog is valid JSON"
 
-# The sway stack: user config includes the package defaults, the session
-# launcher is what the wayland session starts, and mako/waybar ship styles.
-grep -Fq 'include ${OMARCHY_PATH:-/usr/share/omarchy}/default/sway/config' "$ROOT/config/sway/config" ||
-  fail "user sway config loads the Omarchy defaults first"
-[[ -s $ROOT/default/sway/config ]] || fail "default sway config is shipped"
-grep -Fqx 'Exec=omarchy-sway-launch' "$ROOT/default/wayland-sessions/omarchy.desktop" ||
-  fail "wayland session starts the Omarchy sway launcher"
+# The Hyprland stack: the user config bootstraps the package defaults, the
+# session launcher is what the wayland session starts, and mako/waybar ship
+# styles for the shim shell that stands in for Quickshell.
+grep -Fq 'default/hypr/bootstrap.lua' "$ROOT/config/hypr/hyprland.lua" ||
+  fail "user hyprland.lua loads the Omarchy bootstrap first"
+grep -Fq 'require("default.hypr.omarchy")' "$ROOT/config/hypr/hyprland.lua" ||
+  fail "user hyprland.lua loads the Omarchy defaults"
+[[ -s $ROOT/default/hypr/omarchy.lua ]] || fail "default hypr config is shipped"
+grep -Fqx 'Exec=omarchy-hyprland-launch' "$ROOT/default/wayland-sessions/omarchy.desktop" ||
+  fail "wayland session starts the Omarchy Hyprland launcher"
 [[ -s $ROOT/config/mako/config ]] || fail "mako notification config is shipped"
 [[ -s $ROOT/config/waybar/style.css ]] || fail "waybar stylesheet is shipped"
-pass "sway session stack configs are shipped and wired"
+pass "Hyprland session stack configs are shipped and wired"
 
-# Themes render the CPU desktop from templates: sway, waybar, mako, swaylock.
-for tpl in sway.tpl waybar.css.tpl mako.ini.tpl swaylock.args.tpl; do
+# The launcher owns the two things the pixman renderer cannot work without.
+for var in 'HYPRLAND_RENDERER=pixman' 'AQ_FORCE_ALLOCATOR=dumb'; do
+  grep -Fq "export $var" "$ROOT/bin/omarchy-hyprland-launch" ||
+    fail "session launcher exports $var"
+done
+pass "session launcher selects the pixman CPU renderer"
+
+# Themes render the CPU desktop from templates: hyprland, waybar, mako, swaylock.
+for tpl in hyprland.lua.tpl waybar.css.tpl mako.ini.tpl swaylock.args.tpl; do
   [[ -s $ROOT/default/themed/$tpl ]] || fail "theme template exists: $tpl"
 done
 pass "CPU desktop theme templates are shipped"
