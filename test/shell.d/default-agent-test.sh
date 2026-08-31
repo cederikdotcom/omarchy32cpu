@@ -187,8 +187,8 @@ source "$ROOT/default/bash/aliases"
   fail "terminal alias launches the default agent inline"
 pass "terminal alias launches the default agent inline"
 
-grep -Fq 'bindsym $mod+Shift+Ctrl+a exec omarchy-agent --pick' \
-  "$ROOT/default/sway/config" ||
+grep -Fq 'o.bind("SUPER + SHIFT + CTRL + A", "Agent", "omarchy-agent --pick")' \
+  "$ROOT/default/hypr/bindings/utilities.lua" ||
   fail "agent launcher has a keyboard shortcut"
 pass "agent launcher has a keyboard shortcut"
 

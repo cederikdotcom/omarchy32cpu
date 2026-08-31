@@ -25,7 +25,8 @@ pass "waybar clock alt format keeps the ISO week"
 
 # The calendar hotkey survives: it routes through the omarchy-shell shim, which
 # absorbs targets the Lite stack cannot serve instead of erroring the binding.
-grep -q 'bindsym \$mod+Ctrl+Alt+d exec omarchy-shell shell toggle omarchy.clock' "$ROOT/default/sway/config" ||
+grep -Fq 'o.bind("SUPER + CTRL + ALT + D", "Calendar", "omarchy-shell shell toggle omarchy.clock")' \
+  "$ROOT/default/hypr/bindings/utilities.lua" ||
   fail "SUPER+CTRL+ALT+D still routes the calendar toggle through the shell shim"
 pass "SUPER+CTRL+ALT+D still routes the calendar toggle through the shell shim"
 
