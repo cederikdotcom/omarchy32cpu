@@ -1,0 +1,93 @@
+name: upstream sync check
+
+# Keeps this fork aware of its upstream without ever auto-merging into the
+# work branch: mirrors upstream to a tracking branch, then reports whether
+# our branch still merges cleanly. Divergence is surfaced as an issue, not
+# silently resolved.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  UPSTREAM: omacom/omarchy
+  WORK_BRANCH: main
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Mirror upstream to the tracking branch
+        id: mirror
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          default=$(gh repo view "$UPSTREAM" --json defaultBranchRef -q .defaultBranchRef.name)
+          echo "upstream default branch: $default"
+          git remote add upstream "https://github.com/$UPSTREAM.git"
+          git fetch --no-tags upstream "$default"
+          git push -f origin "upstream/$default:refs/heads/upstream-tracking"
+          echo "default=$default" >> "$GITHUB_OUTPUT"
+          echo "behind=$(git rev-list --count HEAD..upstream/$default)" >> "$GITHUB_OUTPUT"
+          echo "ahead=$(git rev-list --count upstream/$default..HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Test-merge upstream into the work branch
+        id: testmerge
+        run: |
+          set -uo pipefail
+          git config user.email "actions@github.com"
+          git config user.name "upstream sync"
+          git checkout -q "$WORK_BRANCH" 2>/dev/null || git checkout -q -b "$WORK_BRANCH" origin/"$WORK_BRANCH"
+          if git merge --no-commit --no-ff "upstream/${{ steps.mirror.outputs.default }}" >/tmp/merge.log 2>&1; then
+            git merge --abort 2>/dev/null || true
+            echo "clean=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "clean=false" >> "$GITHUB_OUTPUT"
+            git diff --name-only --diff-filter=U | head -40 > /tmp/conflicts.txt || true
+            git merge --abort 2>/dev/null || true
+          fi
+
+      - name: Report divergence
+        if: steps.mirror.outputs.behind != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEHIND: ${{ steps.mirror.outputs.behind }}
+          AHEAD: ${{ steps.mirror.outputs.ahead }}
+          CLEAN: ${{ steps.testmerge.outputs.clean }}
+          UP_DEFAULT: ${{ steps.mirror.outputs.default }}
+        run: |
+          set -euo pipefail
+          title="upstream sync: $WORK_BRANCH is $BEHIND commits behind $UPSTREAM"
+          {
+            echo "Automated check on $(date -u +%Y-%m-%d)."
+            echo
+            echo "- upstream: \`$UPSTREAM\` (\`$UP_DEFAULT\`), mirrored here as \`upstream-tracking\`"
+            echo "- our branch: \`$WORK_BRANCH\` is **$BEHIND behind**, $AHEAD ahead"
+            echo "- clean merge: **$CLEAN**"
+            echo
+            if [ "$CLEAN" = "false" ]; then
+              echo "Conflicting paths:"
+              echo
+              sed 's/^/- /' /tmp/conflicts.txt
+            else
+              echo "Upstream merges cleanly. Nothing urgent - merge when convenient."
+            fi
+            echo
+            echo "Nothing was merged automatically. This issue updates itself on each run."
+          } > /tmp/body.md
+          existing=$(gh issue list --state open --search "upstream sync in:title" --json number -q '.[0].number' || true)
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --title "$title" --body-file /tmp/body.md
+          else
+            gh issue create --title "$title" --body-file /tmp/body.md
+          fi
