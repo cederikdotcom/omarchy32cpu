@@ -1,0 +1,175 @@
+# Runbook: install omarchy32cpu on x86_64
+
+The low-friction path, and the one most testers want. omarchy32cpu was built for a 2006 32-bit MacBook, but the thing that makes it interesting - a desktop that needs no GPU at all - is architecture-independent. On official Arch x86_64 the whole archlinux32 problem disappears: no override packages, no 32-bit EFI, no dependency drift.
+
+Read [`../../TESTING.md`](../../TESTING.md) first. It says what is known broken and what to report.
+
+Status: rehearsed end to end on 2026-08-31 in a QEMU VM with no GPU - the build below boots to the themed sway desktop, with a working menu and terminal. Nobody has run it on real x86_64 hardware yet. That is what we are asking for. See "What was verified" at the end for exactly what that covers.
+
+## What differs from the i686 MacBook path
+
+The procedure below is the [A1181 runbook](a1181-install.md) with four things removed. Everything else - the same package core, the same `omarchy-apply-system` flow, the same manual config seeding in place of `/etc/skel`, the same greetd session, the same `WLR_RENDERER=pixman` - is unchanged.
+
+| A1181 (i686) | x86_64 | Why |
+|---|---|---|
+| archlinux32 repos, `Architecture = i686` | official Arch, `Architecture = auto` | ordinary Arch |
+| fontconfig + neatvnc override packages | none | Arch already carries fontconfig 2:2.18.3 and neatvnc 1.0.1 |
+| GRUB `i386-efi` as `BOOTIA32.EFI` | GRUB `x86_64-efi` as `BOOTX64.EFI`, or systemd-boot | ordinary 64-bit UEFI |
+| Apple hardware fixes (mbpfan, iSight, ath5k) | none, unless you have that hardware | DMI-guarded, they skip themselves |
+
+`omarchy-refresh-grub` picks the right target from `uname -m`, so you do not need to think about it.
+
+## Install
+
+You need an Arch install medium and the standard Arch install knowledge. This is not an installer; it is a set of steps on top of a normal Arch install.
+
+1. Boot the Arch ISO. Connect to the network (`iwctl` for wifi).
+
+2. Partition. GPT, a 512 MB ESP (FAT32) mounted at `/boot`, and an ext4 root. Mount root at `/mnt` and the ESP at `/mnt/boot`.
+
+3. Install the core:
+
+   ```bash
+   pacstrap -K /mnt $(grep -v '^#' /path/to/omarchy32cpu/install/omarchy-base.packages | grep -v '^$')
+   ```
+
+   That is the same 58-package list the MacBook uses. It pulls in roughly 250 packages with dependencies. If you have not cloned the repo yet, `pacstrap -K /mnt base linux linux-firmware git` first, then clone it inside the target and rerun `pacstrap` with the list.
+
+4. The usual Arch system files, before anything else runs:
+
+   ```bash
+   genfstab -U /mnt >> /mnt/etc/fstab
+   echo myhostname > /mnt/etc/hostname
+   echo "KEYMAP=us" > /mnt/etc/vconsole.conf      # write this BEFORE mkinitcpio
+   echo "en_US.UTF-8 UTF-8" > /mnt/etc/locale.gen
+   echo "LANG=en_US.UTF-8" > /mnt/etc/locale.conf
+   ln -sf /usr/share/zoneinfo/<Region>/<City> /mnt/etc/localtime
+   arch-chroot /mnt locale-gen
+   ```
+
+   `omarchy-sway-launch` reads the keyboard layout out of `/etc/vconsole.conf`, so what you put there is what the desktop gets.
+
+5. Put the repo where the session expects it, and create your user:
+
+   ```bash
+   git clone https://github.com/cederikdotcom/omarchy32cpu /mnt/usr/share/omarchy
+   arch-chroot /mnt useradd -m -G wheel -s /bin/bash <user>
+   arch-chroot /mnt passwd <user>
+   ```
+
+   `/usr/share/omarchy` is not negotiable: greetd's session command is an absolute path into it.
+
+6. Run the system stage in the chroot:
+
+   ```bash
+   arch-chroot /mnt /usr/share/omarchy/bin/omarchy-apply-system --install-user <user> --first-install
+   ```
+
+   This does config, hardware detection, the greetd login config and post-install. It writes a log to `/var/log/omarchy-install.log`. The hardware scripts are all guarded and skip themselves on machines they do not match.
+
+   ufw comes up enforcing deny-incoming. `ufw allow` anything you need once you have booted; rules cannot be added from inside a chroot.
+
+7. Run the user stage. Upstream's omarchy package seeds `/etc/skel`; this fork has no package, so seed the config by hand:
+
+   ```bash
+   arch-chroot /mnt sudo -u <user> bash -c '
+     mkdir -p ~/.config
+     cp -r /usr/share/omarchy/config/* ~/.config/
+     OMARCHY_PATH=/usr/share/omarchy PATH=/usr/share/omarchy/bin:$PATH \
+       omarchy-provision-user --first-install --force'
+   ```
+
+8. Bootloader:
+
+   ```bash
+   arch-chroot /mnt /usr/share/omarchy/bin/omarchy-refresh-grub
+   ```
+
+   On a first run this installs GRUB as `/boot/EFI/BOOT/BOOTX64.EFI` in the removable fallback path (`--removable --no-nvram`, so it needs no NVRAM write and works in a VM or on a machine with a hostile firmware), then writes `grub.cfg`. Run it again after every kernel update.
+
+   If you would rather use systemd-boot, install it the usual way and skip this step. Nothing in the fork depends on GRUB except this command.
+
+9. Reboot. greetd starts `/usr/share/omarchy/bin/omarchy-sway-launch` and autologs `<user>` into sway with the pixman renderer.
+
+## Test target A: a QEMU VM with no GPU
+
+The most reproducible tester setup there is, and the one closest to what the fork is for. `-vga std` gives the guest a bochs-drm framebuffer: real KMS, no GPU acceleration of any kind. That is exactly the render floor omarchy32cpu targets.
+
+Create a disk and install into it from the Arch ISO with the steps above:
+
+```bash
+qemu-img create -f qcow2 omarchy-x86_64.qcow2 16G
+cp /usr/share/edk2/x64/OVMF_VARS.4m.fd ./OVMF_VARS.fd   # Arch host
+# Debian/Ubuntu host: cp /usr/share/OVMF/OVMF_VARS_4M.fd ./OVMF_VARS.fd
+
+qemu-system-x86_64 \
+  -enable-kvm -machine q35 -cpu host -smp 2 -m 4096 \
+  -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.4m.fd \
+  -drive if=pflash,format=raw,file=./OVMF_VARS.fd \
+  -drive file=omarchy-x86_64.qcow2,format=qcow2,if=none,id=hd0 \
+  -device ich9-ahci,id=ahci -device ide-hd,drive=hd0,bus=ahci.0 \
+  -cdrom archlinux-x86_64.iso \
+  -vga std \
+  -netdev user,id=n0 -device e1000,netdev=n0 \
+  -display gtk
+```
+
+On the Debian/Ubuntu firmware path the code file is `/usr/share/OVMF/OVMF_CODE_4M.fd`. Drop `-cdrom` after the install. Drop `-enable-kvm -cpu host` if you have no KVM (it will be slow but it works).
+
+Two notes from building this image on a bench:
+
+- Keep the initramfs small. `MODULES=(ahci sd_mod ext4 bochs)` and `HOOKS=(base udev modconf block filesystems fsck)` in `/etc/mkinitcpio.conf` gives a small image; the default `kms` hook drags in every GPU firmware blob and costs you a 180 MB initramfs you do not need in a VM.
+- Add `console=tty0 console=ttyS0,115200` to `GRUB_CMDLINE_LINUX_DEFAULT` and run QEMU with `-serial file:serial.log`. When the graphical side fails, the serial log is the only thing that tells you why.
+
+## Test target B: a cloud instance
+
+Any provider's smallest x86_64 instance works, and there is no GPU to worry about by definition. The catch is that most providers give you an image, not an install medium; you either need a rescue/netboot mode you can run the steps above from, or a provider that lets you attach an Arch ISO.
+
+Once it boots, the desktop is reachable without a console:
+
+```bash
+omarchy-remote-view on          # or menu: Trigger > Toggle > Remote View
+```
+
+That starts wayvnc against the live session over wlroots screencopy - a path that works precisely because the renderer is CPU-side. It binds `127.0.0.1:5901` only, so from your machine:
+
+```bash
+ssh -L 5901:127.0.0.1:5901 <user>@<host>
+```
+
+then point any VNC client at `localhost:5901`. For a browser instead of a VNC client, put a websockify/noVNC in front of it locally; `docs/runbooks/testbench.md` describes that setup as it is used for the project's own demo.
+
+Do not expose 5901 directly. The default ufw posture denies incoming anyway.
+
+## What was verified, and what was not
+
+Verified on 2026-08-31 against official Arch x86_64 (`core` and `extra` from `geo.mirror.pkgbuild.com`), on a Debian 13 build box with no KVM (so the VM ran under TCG emulation):
+
+- **Every name in `install/omarchy-base.packages` exists on official Arch x86_64 under exactly that name.** No renames, no substitutions, nothing missing. The list was checked package by package with `pacman -Si`, then resolved as a set, then really installed with `pacstrap` into a throwaway root.
+- **No override package is needed.** Arch carries `fontconfig 2:2.18.3-2` - the same version the i686 path has to rebuild by hand - and `neatvnc 1.0.1-2` against `wayvnc 0.10.1-1`. Both of the archlinux32 dependency-drift bugs are simply absent here.
+- **`omarchy-apply-system --install-user <user> --first-install` exits 0**, with every install phase logged as Completed, `display-manager.service` symlinked to `greetd.service`, and the expected `/etc/greetd/config.toml` including the `initial_session` autologin block.
+- **`omarchy-provision-user --first-install --force` exits 0** and lands the Tokyo Night theme in `~/.local/state/omarchy/current/`.
+- **`omarchy-refresh-grub` installs `BOOTX64.EFI`** and writes a grub.cfg with working kernel entries.
+- **The whole chain boots**: 64-bit OVMF firmware -> `BOOTX64.EFI` -> GRUB -> kernel -> greetd -> the autologin sway session on the display, with `systemd` reaching `graphical.target`.
+- **The desktop works.** `docs/pixman-renderer/x86_64-vm.png` is a screenshot of that VM: sway, waybar, swaybg with the Tokyo Night background, two mako notifications, the fuzzel menu open on `Super+Space`, and a foot terminal opened with `Super+Return` showing `sway version 1.12` and `WLR_RENDERER=pixman`.
+
+The renderer is worth restating: that is sway 1.12 drawing a full desktop with the CPU, on a `-vga std` bochs framebuffer with no GPU acceleration available at all.
+
+Not verified, and the reason this runbook exists:
+
+- **No real x86_64 hardware.** Nothing here says anything about real graphics, wifi, audio, battery, suspend, brightness or a real display panel.
+- **The steps as printed were not run as printed.** The VM was built by scripting the same operations against a mounted disk image rather than by typing them at an Arch ISO prompt. The commands are the same; the sequencing of a live install is not something this proves.
+- **The GLES2 renderer.** The session forces pixman. Nobody has run `WLR_RENDERER=gles2` on hardware that could accelerate it.
+
+Two known cosmetic issues on this path, both already understood:
+
+- **foot prints deprecation warnings on every launch.** foot 1.27 (Arch) wants `[colors-dark]` where the fork's theme template writes `[colors]`, which is what foot 1.13 (archlinux32) requires. One static template cannot satisfy both, so the newer foot logs about 20 `deprecated:` lines per terminal. The colors themselves apply correctly. Do not report this.
+- **`libxml2-legacy`** is in the package list because archlinux32's waybar links `libxml2.so.2` while that repo ships libxml2 2.15. Arch has the package too, so it installs cleanly, but it is probably unnecessary on x86_64. It is left in so both architectures share one list.
+
+## Troubleshooting
+
+- **Black screen after greetd.** Confirm the renderer with `env | grep WLR_` inside the session, and check `dmesg | grep -i drm` for KMS errors. `journalctl -b -u greetd` has the login side.
+- **greetd shows the text greeter instead of autologging in.** `initial_session` runs once per boot; that is greetd semantics. A `systemctl restart greetd` always lands on tuigreet. Reboot, or log in through it.
+- **You want to try the GPU.** The session forces `WLR_RENDERER=pixman` for the MacBook's sake. On real hardware `WLR_RENDERER=gles2` should be hardware-accelerated and faster, and nobody has tested it. Please do, and report it - see "The renderer question" in TESTING.md.
+- **`pacman` wants to replace your pacman.conf.** It will not. The archlinux32 configs in `default/pacman/` are only applied when `uname -m` reports i686; on anything else the installer leaves your `/etc/pacman.conf` and mirrorlist alone.
+- **Screen sharing fails.** Permanent under the pixman renderer, on every architecture. Not a bug.
