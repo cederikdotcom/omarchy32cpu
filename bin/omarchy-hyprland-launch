@@ -24,7 +24,7 @@ export OMARCHY_PATH PATH
 # xdg-terminal-exec is an AUR package and is in neither the core set nor the
 # archlinux32 repos, so the TERMINAL the uwsm defaults ask for may not exist.
 # foot is in the core set and omarchy-launch-terminal falls back to it too.
-if [[ $TERMINAL == "xdg-terminal-exec" ]] && ! command -v xdg-terminal-exec >/dev/null; then
+if [[ $TERMINAL == "xdg-terminal-exec" ]] && omarchy-cmd-missing xdg-terminal-exec; then
   export TERMINAL=foot
 fi
 
@@ -90,7 +90,7 @@ export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNT
 # login. The watchdog execvp's Hyprland from PATH and inherits this
 # environment, so everything exported above still reaches the compositor.
 # It ships with the fork build, but fall back if an install predates it.
-if command -v start-hyprland >/dev/null; then
+if omarchy-cmd-present start-hyprland; then
   if (($#)); then
     exec start-hyprland -- "$@"
   fi
