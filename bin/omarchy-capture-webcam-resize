@@ -15,36 +15,45 @@ usage() {
   exit 1
 }
 
+hypr_dispatch() {
+  local lua="$1"
+  shift
+
+  hyprctl dispatch "$lua" >/dev/null 2>&1 || hyprctl dispatch "$@" >/dev/null
+}
+
 action=${1:-}
 case $action in
 smaller | larger | reset | small | medium | large) ;;
 *) usage ;;
 esac
 
-if ! client=$(swaymsg -t get_tree 2>/dev/null | jq -cer '[.. | objects | select(.type? == "con" or .type? == "floating_con") | select(.name == "WebcamOverlay")] | first // empty' 2>/dev/null); then
+if ! client=$(hyprctl clients -j 2>/dev/null | jq -cer 'first(.[] | select(.title == "WebcamOverlay")) // empty' 2>/dev/null); then
   exit 0
 fi
 
-read -r con_id window_x window_y current_width current_height < <(
-  jq -r '[.id, .rect.x, .rect.y, .rect.width, .rect.height] | @tsv' <<<"$client"
+read -r address current_width current_height monitor_id < <(
+  jq -r '[.address, .size[0], .size[1], .monitor] | @tsv' <<<"$client"
 )
 
-[[ $con_id =~ ^[0-9]+$ && $window_x =~ ^-?[0-9]+$ && $window_y =~ ^-?[0-9]+$ && $current_width =~ ^[0-9]+$ && $current_height =~ ^[0-9]+$ ]] || exit 0
+[[ -n $address && $current_width =~ ^[0-9]+$ && $current_height =~ ^[0-9]+$ && $monitor_id =~ ^[0-9]+$ ]] || exit 0
 ((current_width > 0 && current_height > 0)) || exit 0
 
-# The output the overlay sits on: the one whose logical rect contains the
-# window center, falling back to the focused output. sway output rects are
-# already logical with the transform applied, so no scale math is needed.
-if ! monitor=$(swaymsg -t get_outputs 2>/dev/null | jq -cer \
-  --argjson cx "$((window_x + current_width / 2))" \
-  --argjson cy "$((window_y + current_height / 2))" \
-  'first(.[] | select(.active == true and .rect.x <= $cx and $cx < .rect.x + .rect.width and .rect.y <= $cy and $cy < .rect.y + .rect.height))
-   // first(.[] | select(.focused == true)) // empty' 2>/dev/null); then
+if ! monitor=$(hyprctl monitors -j 2>/dev/null | jq -cer --argjson id "$monitor_id" 'first(.[] | select(.id == $id)) // empty' 2>/dev/null); then
   exit 0
 fi
 
 read -r monitor_x monitor_y monitor_width monitor_height < <(
-  jq -r '[.rect.x, .rect.y, .rect.width, .rect.height] | @tsv' <<<"$monitor"
+  jq -r '
+    . as $monitor |
+    (($monitor.transform // 0) % 2 == 1) as $rotated |
+    [
+      .x,
+      .y,
+      (((if $rotated then .height else .width end) / .scale) | floor),
+      (((if $rotated then .width else .height end) / .scale) | floor)
+    ] | @tsv
+  ' <<<"$monitor"
 )
 
 [[ $monitor_x =~ ^-?[0-9]+$ && $monitor_y =~ ^-?[0-9]+$ && $monitor_width =~ ^[0-9]+$ && $monitor_height =~ ^[0-9]+$ ]] || exit 0
@@ -131,5 +140,10 @@ target_y=$((anchor_y + anchor_height - target_height - MARGIN))
 ((target_x < anchor_x + MARGIN)) && target_x=$((anchor_x + MARGIN))
 ((target_y < anchor_y + MARGIN)) && target_y=$((anchor_y + MARGIN))
 
-swaymsg "[con_id=$con_id] resize set ${target_width} px ${target_height} px" >/dev/null
-swaymsg "[con_id=$con_id] move absolute position $target_x $target_y" >/dev/null
+window="address:$address"
+hypr_dispatch \
+  "hl.dsp.window.resize({ window = \"$window\", x = $target_width, y = $target_height })" \
+  resizewindowpixel "exact $target_width $target_height,$window"
+hypr_dispatch \
+  "hl.dsp.window.move({ window = \"$window\", x = $target_x, y = $target_y })" \
+  movewindowpixel "exact $target_x $target_y,$window"

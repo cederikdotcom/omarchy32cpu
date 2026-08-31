@@ -2,10 +2,6 @@
 
 # omarchy:summary=Launch the Omarchy screensaver in the default terminal on the system with the correct font configuration.
 
-if omarchy-cmd-missing ttfx; then
-  exit 1
-fi
-
 # Exit early if screensaver is already running
 pgrep -f '[o]rg.omarchy.screensaver' && exit 0
 
@@ -25,54 +21,53 @@ case $terminal in
   ;;
 esac
 
-sway_focus_monitor() {
-  # Names come from sway and are interpolated into a command string, so only
-  # plain connector names may pass.
-  [[ $1 =~ ^[A-Za-z0-9._-]+$ ]] || return 0
-  swaymsg "focus output $1" >/dev/null 2>&1
+hypr_focus_monitor() {
+  hyprctl dispatch "hl.dsp.focus({ monitor = \"$1\" })" >/dev/null 2>&1 || hyprctl dispatch focusmonitor "$1" >/dev/null
 }
 
-sway_exec() {
+hypr_exec() {
   local command
   printf -v command '%q ' "$@"
 
-  swaymsg exec -- "$command" >/dev/null 2>&1
+  hyprctl dispatch "hl.dsp.exec_cmd([[$command]])" >/dev/null 2>&1 || hyprctl dispatch exec -- bash -lc "$command" >/dev/null
 }
 
-# Open sway's window event stream before spawning anything, so a terminal that
-# maps quickly can't emit its "new" event before we are listening for it.
-exec {events}< <(swaymsg -r -t subscribe -m '["window"]')
+SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
 
-# sway_exec is async and a new window maps on whatever monitor is focused at that
+# Open Hyprland's event stream before spawning anything, so a terminal that maps
+# quickly can't emit its openwindow event before we are listening for it.
+exec {events}< <(socat -U - "UNIX-CONNECT:$SOCKET")
+
+# hypr_exec is async and a new window maps on whatever monitor is focused at that
 # moment. Block until this monitor's screensaver actually opens before moving
 # focus on -- otherwise slow-starting terminals all pile onto the last monitor.
 # The deadline is a safety net in case the window never appears.
 wait_for_screensaver_window() {
   local line deadline=$((SECONDS + 5))
   while ((SECONDS < deadline)) && IFS= read -r -t $((deadline - SECONDS)) -u "$events" line; do
-    jq -e 'select(.change == "new") | .container.app_id == "org.omarchy.screensaver"' <<<"$line" >/dev/null 2>&1 && return 0
+    [[ $line == openwindow\>\>*,org.omarchy.screensaver,* ]] && return 0
   done
 }
 
-for m in $(swaymsg -t get_outputs | jq -r '.[] | select(.active == true) | .name'); do
-  sway_focus_monitor "$m"
+for m in $(hyprctl monitors -j | jq -r '.[] | .name'); do
+  hypr_focus_monitor "$m"
 
   case $terminal in
   *Alacritty*)
-    sway_exec alacritty --class=org.omarchy.screensaver --config-file "$OMARCHY_PATH/default/alacritty/screensaver.toml" -e omarchy-screensaver
+    hypr_exec alacritty --class=org.omarchy.screensaver --config-file "$OMARCHY_PATH/default/alacritty/screensaver.toml" -e omarchy-screensaver
     ;;
   *ghostty*)
-    sway_exec ghostty --class=org.omarchy.screensaver --config-file="$OMARCHY_PATH/default/ghostty/screensaver" --font-size=18 -e omarchy-screensaver
+    hypr_exec ghostty --class=org.omarchy.screensaver --config-file="$OMARCHY_PATH/default/ghostty/screensaver" --font-size=18 -e omarchy-screensaver
     ;;
   *foot*)
-    sway_exec foot --app-id=org.omarchy.screensaver --config="$OMARCHY_PATH/default/foot/screensaver.ini" -e omarchy-screensaver
+    hypr_exec foot --app-id=org.omarchy.screensaver --config="$OMARCHY_PATH/default/foot/screensaver.ini" -e omarchy-screensaver
     ;;
   *kitty*)
-    sway_exec kitty --class=org.omarchy.screensaver --override font_size=18 --override window_padding_width=0 -e omarchy-screensaver
+    hypr_exec kitty --class=org.omarchy.screensaver --override font_size=18 --override window_padding_width=0 -e omarchy-screensaver
     ;;
   esac
 
   wait_for_screensaver_window
 done
 
-sway_focus_monitor "$focused"
+hypr_focus_monitor "$focused"

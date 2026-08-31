@@ -3,11 +3,11 @@
 # omarchy:summary=Run the Omarchy screensaver using random effects from TTE.
 
 screensaver_in_focus() {
-  [[ $(omarchy-compositor-ctl focused-window 2>/dev/null | head -n 1) == "org.omarchy.screensaver" ]]
+  hyprctl activewindow -j | jq -e '.class == "org.omarchy.screensaver"' >/dev/null 2>&1
 }
 
 exit_screensaver() {
-  swaymsg 'seat * hide_cursor 0' &>/dev/null || true
+  hyprctl eval 'hl.config({ cursor = { invisible = false } })' &>/dev/null || hyprctl keyword cursor:invisible false &>/dev/null || true
   pkill -x ttfx 2>/dev/null
   pkill -f '[o]rg.omarchy.screensaver' 2>/dev/null
   exit 0
@@ -18,8 +18,7 @@ trap exit_screensaver SIGINT SIGTERM SIGHUP SIGQUIT
 
 printf '\033]11;rgb:00/00/00\007'  # Set background color to black
 
-# sway has no cursor-invisible switch; hide the cursor as soon as it idles.
-swaymsg 'seat * hide_cursor 100' &>/dev/null
+hyprctl eval 'hl.config({ cursor = { invisible = true } })' &>/dev/null || hyprctl keyword cursor:invisible true &>/dev/null
 
 tty=$(tty 2>/dev/null)
 
