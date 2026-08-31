@@ -1,5 +1,6 @@
-// Omarchy 32-bit Lite status bar (waybar 0.9.15).
-// Mirrors the old Quickshell bar layout: workspaces on the left, the clock
+// Omarchy CPU status bar. Waybar stands in for the Quickshell bar until
+// issue #2 lands; it talks to Hyprland over its IPC socket.
+// Mirrors the Quickshell bar layout: workspaces on the left, the clock
 // in the center, audio/network/battery/tray on the right. Reload with
 // `omarchy-bar reload` (SIGUSR2); toggle visibility with `omarchy-bar toggle`.
 {
@@ -8,16 +9,16 @@
   "height": 26,
   "spacing": 8,
 
-  "modules-left": ["sway/workspaces", "sway/mode"],
+  "modules-left": ["hyprland/workspaces", "hyprland/submap"],
   "modules-center": ["clock"],
   "modules-right": ["pulseaudio", "network", "battery", "tray"],
 
-  "sway/workspaces": {
+  "hyprland/workspaces": {
     "disable-scroll": false,
     "format": "{name}"
   },
 
-  "sway/mode": {
+  "hyprland/submap": {
     "format": "{}"
   },
 
