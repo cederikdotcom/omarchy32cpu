@@ -1,0 +1,87 @@
+#!/bin/bash
+
+# omarchy:summary=Start the Omarchy Hyprland session (pixman renderer + session environment).
+# omarchy:hidden=true
+
+# Session launcher for Omarchy CPU. Upstream Omarchy starts Hyprland through
+# uwsm ("uwsm start -g -1 -e -D Hyprland hyprland.desktop") from SDDM. This
+# fork logs in through greetd and uwsm is not packaged for archlinux32 i686, so
+# the session starts Hyprland directly. Everything uwsm would have exported is
+# still exported here, from upstream's own env files, so the two paths keep the
+# same session environment.
+#
+# Used by default/wayland-sessions/omarchy.desktop and by greetd
+# (install/login/greetd.sh) for both the greeter session and autologin.
+
+# OMARCHY_PATH + PATH bootstrap, session defaults (TERMINAL, EDITOR), user
+# overrides in ~/.config/uwsm/, and mise activation. This is the file uwsm
+# would have read as /usr/share/uwsm/env.d/10-omarchy.
+: "${OMARCHY_PATH:=/usr/share/omarchy}"
+[[ -r "${OMARCHY_PATH%/}/default/uwsm/env.d/10-omarchy" ]] &&
+  . "${OMARCHY_PATH%/}/default/uwsm/env.d/10-omarchy"
+export OMARCHY_PATH PATH
+
+# xdg-terminal-exec is an AUR package and is in neither the core set nor the
+# archlinux32 repos, so the TERMINAL the uwsm defaults ask for may not exist.
+# foot is in the core set and omarchy-launch-terminal falls back to it too.
+if [[ $TERMINAL == "xdg-terminal-exec" ]] && ! command -v xdg-terminal-exec >/dev/null; then
+  export TERMINAL=foot
+fi
+
+# The pixman (CPU) renderer from this fork's Hyprland build. There is no GPU:
+# HYPRLAND_RENDERER picks the software renderer, and AQ_FORCE_ALLOCATOR=dumb
+# makes aquamarine allocate DRM dumb buffers instead of GBM ones. Both are
+# ignored by a stock Hyprland, which then fails on the missing GLES 3.0.
+export HYPRLAND_RENDERER=pixman
+export AQ_FORCE_ALLOCATOR=dumb
+
+# Don't die when libinput briefly reports no input devices.
+export WLR_LIBINPUT_NO_DEVICES=1
+
+# Keyboard layout from the installer's /etc/vconsole.conf. Upstream reads this
+# in default/hypr/input.lua through hyprctl; the XKB_DEFAULT_* variables reach
+# the compositor before it opens any device, which is what a fresh install with
+# a non-US keymap needs.
+# OMARCHY_VCONSOLE_CONF exists for the tests, which cannot write /etc.
+vconsole_conf=${OMARCHY_VCONSOLE_CONF:-/etc/vconsole.conf}
+xkb_layout=us
+xkb_variant=""
+if [[ -r $vconsole_conf ]]; then
+  while IFS='=' read -r key value; do
+    value=${value%\"} value=${value#\"}
+    case $key in
+      XKBLAYOUT) xkb_layout=$value ;;
+      XKBVARIANT) xkb_variant=$value ;;
+    esac
+  done <"$vconsole_conf"
+fi
+
+# CapsLock is the compose key; Caps Lock itself moves to both Shifts, and the
+# _cancel variant releases a misfire on the next lone Shift.
+xkb_options="compose:caps,shift:both_capslock_cancel"
+
+# Keybindings resolve against the first layout, so a non-Latin layout needs a
+# Latin one in front or the Latin-keysym bindings go dead. (Upstream kept this
+# list in sync with etc/mkinitcpio.conf.d/omarchy_hooks.conf for the LUKS
+# keymap; the Lite initramfs dropped that logic, so this is the only copy.)
+non_latin_layouts=" af am ara bd bg by et ge gr il in iq ir kg kh kz la lk mk mm mn mv np rs ru sy th tj ua "
+first_layout=${xkb_layout%%,*}
+if [[ $non_latin_layouts == *" $first_layout "* ]]; then
+  xkb_layout="us,$xkb_layout"
+  xkb_variant=",$xkb_variant"
+  # Reach the original layout with Left Alt + Right Alt.
+  xkb_options="$xkb_options,grp:alts_toggle"
+fi
+
+export XKB_DEFAULT_LAYOUT=$xkb_layout
+export XKB_DEFAULT_VARIANT=$xkb_variant
+export XKB_DEFAULT_OPTIONS=$xkb_options
+
+# Optional user session environment overrides.
+[[ -f "$HOME/.config/omarchy/session-env" ]] && . "$HOME/.config/omarchy/session-env"
+
+# The session shares the systemd user bus (no dbus-run-session: a private
+# bus would split notifications and user units onto different buses).
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+
+exec Hyprland "$@"

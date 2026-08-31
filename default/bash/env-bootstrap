@@ -17,9 +17,9 @@ export OMARCHY_PATH
 
 # Prepend in dev-link mode, and on package-less installs (this fork has no
 # omarchy package yet, so nothing symlinks omarchy-* into /usr/bin; without
-# the prepend, sway bindings and swaymsg exec cannot find any omarchy
-# command). When a package later provides /usr/bin/omarchy, this stays a
-# no-op on production installs.
+# the prepend, Hyprland keybindings and hyprctl dispatch exec cannot find any
+# omarchy command). When a package later provides /usr/bin/omarchy, this stays
+# a no-op on production installs.
 if [ "$OMARCHY_PATH" != /usr/share/omarchy ] || [ ! -x /usr/bin/omarchy ]; then
   case ":$PATH:" in
     *":${OMARCHY_PATH%/}/bin:"*) ;;

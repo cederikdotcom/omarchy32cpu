@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=Omarchy (sway)
-Comment=Omarchy 32-bit Lite sway session (pixman renderer)
-Exec=omarchy-sway-launch
-TryExec=sway
+Name=Omarchy
+Comment=Omarchy Hyprland session (pixman CPU renderer)
+Exec=omarchy-hyprland-launch
+TryExec=Hyprland
 Type=Application
