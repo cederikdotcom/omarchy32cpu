@@ -11,6 +11,27 @@ hostile target: **archlinux32 i686 on the 2006 Apple MacBook A1181**
 (32-bit Core Duo, GMA 950, 32-bit Apple EFI). This branch is based on
 upstream Omarchy v4.0.1 "Quattro".
 
+## Try it
+
+This is pre-release software that has never run on real hardware. It is
+looking for testers, and **a hardware report is the most useful thing
+you can send** - what your machine is, and what did or did not come up.
+
+1. **Look at it first**, in a browser, no install:
+   [omarchy32.cederik.com/vnc.html](https://omarchy32.cederik.com/vnc.html),
+   password `omarchy32view`. That is a live session on the dev bench, so
+   it is sometimes down.
+2. **Read [`TESTING.md`](TESTING.md)** - what is validated, what is
+   known broken or permanently absent (do not report those), what to
+   test, and the exact diagnostics to gather.
+3. **Install it.** x86_64 is the easy path and the one most testers
+   want: [`docs/runbooks/install-x86_64.md`](docs/runbooks/install-x86_64.md),
+   including a copy-pasteable QEMU line for a VM with no GPU. The
+   32-bit MacBook path is
+   [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md).
+4. **Report** with the
+   [hardware report form](https://github.com/cederikdotcom/omarchy32cpu/issues/new?template=hardware-report.yml).
+
 ## What changed
 
 | Upstream | This fork | Why |
@@ -20,7 +41,7 @@ upstream Omarchy v4.0.1 "Quattro".
 | SDDM greeter | greetd + tuigreet, autologin session | no GL at login |
 | limine + 64-bit UKI | GRUB i386-efi as BOOTIA32.EFI | 32-bit Apple EFI |
 | Arch x86_64 + pkgs.omarchy.org | archlinux32 i686 + fork overrides | 32-bit CPU |
-| 147-package app fleet | 55-package core, bring your own apps | 2 GB RAM |
+| 147-package app fleet | 58-package core, bring your own apps | 2 GB RAM |
 
 Kept unchanged: the theme engine (all 22 themes render sway, waybar,
 mako and swaylock), the bash environment, the omarchy CLI router,
@@ -30,23 +51,36 @@ cloud and headless use.
 
 ## Status
 
-Pre-release, software-validated end to end on a QEMU bench that
-mimics the MacBook1,1 (32-bit CPU model, 2 GB RAM, IA32 UEFI
-firmware): the fork's own installer builds a system that boots to the
-themed sway desktop with zero failed units. `test/cli` 116/116,
-`test/shell` 155/155. Not yet run on the physical MacBook (the GMA
-950 render floor is the open hardware question).
+Pre-release, software-validated end to end on two QEMU benches and no
+real hardware at all.
+
+- **i686**, on a bench that mimics the MacBook1,1 (32-bit CPU model,
+  2 GB RAM, IA32 UEFI firmware): the fork's own installer builds a
+  system that boots to the themed sway desktop with zero failed units.
+- **x86_64**, in a VM with no GPU: the same procedure boots to the same
+  desktop on sway 1.12 with the pixman renderer, menu and terminal
+  working. Screenshot:
+  [`docs/pixman-renderer/x86_64-vm.png`](docs/pixman-renderer/x86_64-vm.png).
+
+`test/cli` 116/116, `test/shell` 155/155. Not yet run on the physical
+MacBook (the GMA 950 render floor is the open hardware question), nor on
+any real x86_64 machine.
 
 ## Documentation
 
+- [`TESTING.md`](TESTING.md) - the tester's contract: what works, what
+  is knowingly broken, what to test, how to report
 - [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md) - the honest
   contract: what is validated, every bug found and fixed during
   validation, what is missing, and what this stack can never do
   (screen sharing, animations, the upstream plugin system)
 - [`docs/a1181-gap-analysis.md`](docs/a1181-gap-analysis.md) - the
   verified gap matrix and the worklist that drove the port
+- [`docs/runbooks/install-x86_64.md`](docs/runbooks/install-x86_64.md) -
+  the x86_64 quick start, plus the QEMU and cloud test targets
 - [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md) -
-  the install procedure, including the manual ISO-layer duties
+  the i686 install procedure, including the manual ISO-layer duties and
+  the override packages
 - [`docs/runbooks/testbench.md`](docs/runbooks/testbench.md) - the
   cloud test bench (i686 chroot, IA32-UEFI QEMU VM, browser view)
 
@@ -55,9 +89,9 @@ themed sway desktop with zero failed units. `test/cli` 116/116,
 No screen sharing ever (pixman has no screencast path). No hardware
 video decode, no Vulkan, no animations or blur. The upstream plugin
 system (Quickshell QML) is incompatible. Updates do not track
-upstream; the fork carries its own package overrides (fontconfig,
-neatvnc) because archlinux32 has real dependency drift. See the
-release notes for the full list.
+upstream; on i686 the fork carries its own package overrides
+(fontconfig, neatvnc) because archlinux32 has real dependency drift -
+x86_64 needs neither. See the release notes for the full list.
 
 ---
 
