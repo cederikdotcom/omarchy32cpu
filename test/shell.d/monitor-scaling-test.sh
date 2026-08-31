@@ -4,83 +4,128 @@ set -euo pipefail
 
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
-# sway accepts arbitrary output scales (no Hyprland-style pixel-exact
-# approximation needed), so the command steps through presets, applies the
-# scale over swaymsg, and persists it for reloads.
-
 test_tmp=$(mktemp -d)
 trap 'rm -rf "$test_tmp"' EXIT
 
 stub_bin="$test_tmp/bin"
+eval_out="$test_tmp/hyprctl-eval"
 home_dir="$test_tmp/home"
-sway_log="$test_tmp/swaymsg.log"
-scale_conf="$home_dir/.local/state/omarchy/toggles/sway/monitor-scale.conf"
+monitor_lua="$home_dir/.config/hypr/monitors.lua"
 scale_log="$home_dir/.local/state/omarchy/monitor-scaling.log"
 
-mkdir -p "$stub_bin" "$home_dir"
+mkdir -p "$stub_bin" "$home_dir/.config/hypr"
 
-cat >"$stub_bin/swaymsg" <<'SH'
+cat >"$stub_bin/hyprctl" <<'SH'
 #!/bin/bash
 
-if [[ ${1:-} == "-t" && ${2:-} == "get_outputs" ]]; then
-  printf '[{"name":"eDP-1","focused":true,"scale":%s}]' "${OMARCHY_TEST_MONITOR_SCALE:-1}"
+if [[ $1 == "monitors" && $2 == "-j" ]]; then
+  printf '[{"name":"eDP-1","focused":true,"scale":%s,"width":%s,"height":%s,"refreshRate":120.0}]' \
+    "${OMARCHY_TEST_MONITOR_SCALE:-2}" "${OMARCHY_TEST_MONITOR_WIDTH:-2880}" "${OMARCHY_TEST_MONITOR_HEIGHT:-1800}"
+elif [[ $1 == "eval" ]]; then
+  printf '%s\n' "$2" >"$OMARCHY_TEST_HYPRCTL_EVAL_OUT"
 else
-  printf '%s\n' "$*" >>"$OMARCHY_TEST_SWAY_LOG"
+  exit 1
 fi
 SH
-chmod +x "$stub_bin/swaymsg"
+chmod +x "$stub_bin/hyprctl"
+
+write_monitor_config() {
+  cat >"$monitor_lua" <<'LUA'
+local omarchy_gdk_scale = 2
+local omarchy_monitor_scale = 2
+LUA
+}
 
 run_scaling() {
-  : >"$sway_log"
   HOME="$home_dir" \
     XDG_STATE_HOME="$home_dir/.local/state" \
     PATH="$stub_bin:$PATH" \
-    OMARCHY_TEST_SWAY_LOG="$sway_log" \
-    OMARCHY_TEST_MONITOR_SCALE="${OMARCHY_TEST_MONITOR_SCALE:-1}" \
+    OMARCHY_TEST_HYPRCTL_EVAL_OUT="$eval_out" \
+    OMARCHY_TEST_MONITOR_SCALE="${OMARCHY_TEST_MONITOR_SCALE:-2}" \
     "$ROOT/bin/omarchy-hyprland-monitor-scaling" "$@"
 }
 
+write_monitor_config
 OMARCHY_TEST_MONITOR_SCALE=2 run_scaling up
-grep -Fx 'output eDP-1 scale 3' "$sway_log" >/dev/null || fail "monitor scaling up reaches 3x"
-grep -Fx 'output eDP-1 scale 3' "$scale_conf" >/dev/null || fail "monitor scaling up persists 3x"
+grep -F 'scale = 3' "$eval_out" >/dev/null || fail "monitor scaling up reaches 3x"
+grep -Fx 'local omarchy_monitor_scale = 3' "$monitor_lua" >/dev/null || fail "monitor scaling up persists 3x"
 grep -F $'requested=up\tcurrent=2\tnew=3\tmonitor=eDP-1' "$scale_log" >/dev/null || fail "monitor scaling up writes audit log"
 pass "monitor scaling up reaches 3x"
 
+write_monitor_config
 OMARCHY_TEST_MONITOR_SCALE=3 run_scaling down
-grep -Fx 'output eDP-1 scale 2' "$sway_log" >/dev/null || fail "monitor scaling down recovers 3x to 2x"
-grep -Fx 'output eDP-1 scale 2' "$scale_conf" >/dev/null || fail "monitor scaling down persists 2x from 3x"
+grep -F 'scale = 2' "$eval_out" >/dev/null || fail "monitor scaling down recovers 3x to 2x"
+grep -Fx 'local omarchy_monitor_scale = 2' "$monitor_lua" >/dev/null || fail "monitor scaling down persists 2x from 3x"
 pass "monitor scaling down recovers 3x to 2x"
 
-# sway reports floating point scales, so stepping must snap to the nearest
-# preset first or it gets stuck.
+write_monitor_config
 OMARCHY_TEST_MONITOR_SCALE=3.0000000000000004 run_scaling down
-grep -Fx 'output eDP-1 scale 2' "$sway_log" >/dev/null || fail "monitor scaling down snaps floating point 3x to 2x"
+grep -F 'scale = 2' "$eval_out" >/dev/null || fail "monitor scaling down snaps floating point 3x to 2x"
+grep -Fx 'local omarchy_monitor_scale = 2' "$monitor_lua" >/dev/null || fail "monitor scaling down persists 2x from floating point 3x"
 pass "monitor scaling down snaps floating point 3x to 2x"
 
-OMARCHY_TEST_MONITOR_SCALE=4 run_scaling up
-grep -Fx 'output eDP-1 scale 4' "$sway_log" >/dev/null || fail "monitor scaling up stays at the top preset"
-pass "monitor scaling up stays at the top preset"
+write_monitor_config
+OMARCHY_TEST_MONITOR_SCALE=2 run_scaling 3
+grep -F 'scale = 3' "$eval_out" >/dev/null || fail "monitor scaling explicit 3x remains available"
+grep -Fx 'local omarchy_monitor_scale = 3' "$monitor_lua" >/dev/null || fail "monitor scaling explicit 3x persists"
+grep -Fx 'local omarchy_gdk_scale = 3' "$monitor_lua" >/dev/null || fail "monitor scaling explicit 3x persists GDK scale"
+pass "monitor scaling explicit 3x remains available"
 
+# GTK only honors integer GDK_SCALE, so fractional monitor scales persist a
+# rounded GDK scale.
+write_monitor_config
 OMARCHY_TEST_MONITOR_SCALE=2 run_scaling 1.6
-grep -Fx 'output eDP-1 scale 1.6' "$sway_log" >/dev/null || fail "monitor scaling explicit 1.6x remains available"
-grep -Fx 'output eDP-1 scale 1.6' "$scale_conf" >/dev/null || fail "monitor scaling explicit 1.6x persists"
-pass "monitor scaling explicit 1.6x remains available"
+grep -F 'scale = 1.6' "$eval_out" >/dev/null || fail "monitor scaling explicit 1.6x remains available"
+grep -Fx 'local omarchy_monitor_scale = 1.6' "$monitor_lua" >/dev/null || fail "monitor scaling explicit 1.6x persists"
+grep -Fx 'local omarchy_gdk_scale = 2' "$monitor_lua" >/dev/null || fail "monitor scaling 1.6x persists integer GDK scale 2"
+pass "monitor scaling 1.6x persists integer GDK scale 2"
 
-# Any scale between 1 and 4 is legal for sway, presets are just the step stops.
-OMARCHY_TEST_MONITOR_SCALE=2 run_scaling 1.75
-grep -Fx 'output eDP-1 scale 1.75' "$sway_log" >/dev/null || fail "monitor scaling accepts arbitrary scales in range"
-pass "monitor scaling accepts arbitrary scales in range"
+write_monitor_config
+OMARCHY_TEST_MONITOR_SCALE=2 run_scaling 1.25
+grep -Fx 'local omarchy_monitor_scale = 1.25' "$monitor_lua" >/dev/null || fail "monitor scaling explicit 1.25x persists"
+grep -Fx 'local omarchy_gdk_scale = 1' "$monitor_lua" >/dev/null || fail "monitor scaling 1.25x persists integer GDK scale 1"
+pass "monitor scaling 1.25x persists integer GDK scale 1"
 
-if OMARCHY_TEST_MONITOR_SCALE=2 run_scaling 5 2>/dev/null; then
-  fail "monitor scaling rejects a scale outside 1-4"
-fi
-if OMARCHY_TEST_MONITOR_SCALE=2 run_scaling 'bogus' 2>/dev/null; then
-  fail "monitor scaling rejects a non-numeric scale"
-fi
-pass "monitor scaling rejects out-of-range and malformed scales"
+scale=$(OMARCHY_TEST_MONITOR_SCALE=3 run_scaling)
+[[ $scale == "3" ]] || fail "monitor scaling reports explicit 3x scale" "actual: $scale"
+pass "monitor scaling reports explicit 3x scale"
 
-scale=$(OMARCHY_TEST_MONITOR_SCALE=3.0 run_scaling)
-[[ $scale == "3" ]] || fail "monitor scaling reports a normalized current scale" "actual: $scale"
 scale=$(OMARCHY_TEST_MONITOR_SCALE=3.2 run_scaling)
 [[ $scale == "3.2" ]] || fail "monitor scaling reports the actual non-preset scale" "actual: $scale"
-pass "monitor scaling reports the current scale"
+pass "monitor scaling reports the actual non-preset scale"
+
+# 1280x800 approximates the 3x preset as 3.2x.
+write_monitor_config
+OMARCHY_TEST_MONITOR_SCALE=2 OMARCHY_TEST_MONITOR_WIDTH=1280 OMARCHY_TEST_MONITOR_HEIGHT=800 run_scaling 3
+grep -F 'scale = 3.2' "$eval_out" >/dev/null || fail "monitor scaling approximates explicit 3x as 3.2x"
+grep -Fx 'local omarchy_monitor_scale = 3.2' "$monitor_lua" >/dev/null ||
+  fail "monitor scaling persists approximated 3.2x"
+pass "monitor scaling approximates explicit 3x as 3.2x"
+
+write_monitor_config
+OMARCHY_TEST_MONITOR_SCALE=2 OMARCHY_TEST_MONITOR_WIDTH=1280 OMARCHY_TEST_MONITOR_HEIGHT=800 run_scaling up
+grep -F 'scale = 3.2' "$eval_out" >/dev/null || fail "monitor scaling up reaches approximated 3.2x"
+pass "monitor scaling up reaches approximated 3.2x"
+
+write_monitor_config
+OMARCHY_TEST_MONITOR_SCALE=4 OMARCHY_TEST_MONITOR_WIDTH=1280 OMARCHY_TEST_MONITOR_HEIGHT=800 run_scaling down
+grep -F 'scale = 3.2' "$eval_out" >/dev/null || fail "monitor scaling down reaches approximated 3.2x"
+pass "monitor scaling down reaches approximated 3.2x"
+
+write_monitor_config
+OMARCHY_TEST_MONITOR_SCALE=2 OMARCHY_TEST_MONITOR_WIDTH=6016 OMARCHY_TEST_MONITOR_HEIGHT=3384 run_scaling 1.25
+grep -F 'scale = 1.33333' "$eval_out" >/dev/null || fail "monitor scaling approximates explicit 1.25x"
+pass "monitor scaling approximates explicit 1.25x"
+
+write_monitor_config
+OMARCHY_TEST_MONITOR_SCALE=2 OMARCHY_TEST_MONITOR_WIDTH=1280 OMARCHY_TEST_MONITOR_HEIGHT=800 run_scaling 3.2
+grep -F 'scale = 3.2' "$eval_out" >/dev/null || fail "monitor scaling accepts displayed approximate values"
+pass "monitor scaling accepts displayed approximate values"
+
+# On a mode where both 3x and 4x resolve to 4x, the duplicate is one step.
+write_monitor_config
+OMARCHY_TEST_MONITOR_SCALE=4 OMARCHY_TEST_MONITOR_WIDTH=1280 OMARCHY_TEST_MONITOR_HEIGHT=804 run_scaling down
+grep -F 'scale = 2' "$eval_out" >/dev/null || fail "monitor scaling down skips duplicate 4x approximation"
+grep -Fx 'local omarchy_monitor_scale = 2' "$monitor_lua" >/dev/null ||
+  fail "monitor scaling down persists 2x after skipping duplicate approximation"
+pass "monitor scaling down skips duplicate approximation"
