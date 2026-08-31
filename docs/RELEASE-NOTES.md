@@ -114,6 +114,27 @@ owns:
   `omarchy-compositor-ctl`; notifications deliver from any shell;
   zero failed systemd units
 
+### Caveat: `grim` is not a faithful instrument for this renderer
+
+Read this before trusting any screenshot above. Under the pixman
+renderer a `grim` capture comes from a mirror framebuffer that
+`endRender` only refreshes while `needsACopyFB()` is true, and only
+inside `finalDamage`. When normal frames stop, the mirror stops with
+them and `grim` keeps handing back the last image it held. Captures were
+observed byte-identical across steps that visibly changed the screen.
+
+The reliable instrument is the QEMU monitor's `screendump`, which reads
+the emulated display itself:
+
+```bash
+echo "screendump /opt/o64vm/shot.ppm" | socat - unix-connect:/opt/o64vm/mon.sock
+```
+
+Much of the M1-era renderer verification rests on `grim`, so those
+results carry some risk and should be re-obtained with `screendump`
+before they are treated as settled. The bench runbook
+(`hyprdev/BENCH.md`) carries the same warning.
+
 ## Fixed during validation (would have broken a real install)
 
 1. `ufw` was missing from the package set; `install/config/firewall.sh`
