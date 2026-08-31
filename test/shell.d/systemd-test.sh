@@ -76,8 +76,8 @@ grep -F 'pkill -x fcitx5' "$ROOT/bin/omarchy-restart-xcompose" >/dev/null ||
 
 grep -F 'omarchy-fcitx5.service' "$first_run_units" >/dev/null ||
   fail "first-run does not enable the input method, so ~/.XCompose sequences never resolve"
-grep -rF 'fcitx5' "$ROOT/default/sway" "$ROOT/config/sway" >/dev/null 2>&1 &&
-  fail "fcitx5 is autostarted from sway; an unsupervised launch dies silently and takes every compose sequence with it"
+grep -F 'fcitx5' "$ROOT/default/hypr/autostart.lua" >/dev/null &&
+  fail "fcitx5 is autostarted from Hyprland; an unsupervised launch dies silently and takes every compose sequence with it"
 pass "fcitx5 runs supervised, so a lost input method comes back instead of killing XCompose until logout"
 
 oomd_slice="$ROOT/default/systemd/user/app.slice.d/10-oomd.conf"
