@@ -1,5 +1,27 @@
 # Omarchy core package list pacstrapped by the ISO.
 # The ISO builder also reads this file when constructing the offline mirror.
+#
+# Every name here must exist under exactly this name on BOTH official Arch
+# x86_64 and archlinux32 i686: the list is shared and pacstrap aborts on a
+# target it cannot find. Verified with `pacman -Si` in both chroots.
+#
+# NOT IN THIS LIST, ON PURPOSE: Hyprland itself and the hypr* libraries it
+# links. Omarchy CPU runs this fork's Hyprland and aquamarine, which add the
+# pixman (CPU) renderer that upstream does not have, so the compositor cannot
+# come from a repo:
+#
+#   Hyprland      github.com/cederikdotcom/Hyprland, branch pixman-renderer
+#   aquamarine    github.com/cederikdotcom/aquamarine, branch cpu-backend
+#
+# Both are installed from the fork build until a fork package repo exists;
+# see docs/runbooks/install-x86_64.md and docs/runbooks/a1181-install.md.
+# The same goes for their hypr* dependencies (hyprutils, hyprlang, hyprcursor,
+# hyprgraphics, hyprwayland-scanner): official Arch x86_64 carries all of them
+# at the versions Hyprland 0.56 wants, but archlinux32 has hyprcursor and
+# hyprgraphics not at all and hyprutils/hyprlang far too old, so the fork build
+# provides them on both arches rather than the list installing two different
+# stacks. Everything below is the shared runtime the fork binaries link
+# against, and that a repo package would have pulled in for us.
 
 base
 bat
@@ -7,6 +29,7 @@ bluez
 bluez-utils
 brightnessctl
 btop
+cairo
 efibootmgr
 fastfetch
 fd
@@ -21,31 +44,46 @@ grim
 grub
 gum
 jq
+lcms2
+libdisplay-info
+libdrm
+libei
+libinput
+libliftoff
 libpulse
+libxcursor
+libxkbcommon
 libxml2-legacy
 linux
 linux-firmware
+lua
 mako
+mesa
+muparser
 neovim
 networkmanager
 noto-fonts
 noto-fonts-emoji
+pango
 pipewire
 pipewire-pulse
+pixman
 plocate
 polkit
+polkit-gnome
 psmisc
 qrencode
+re2
 ripgrep
 seatd
 slurp
 starship
 sudo
-sway
 swaybg
 swayidle
 swaylock
 tmux
+tomlplusplus
 ttf-jetbrains-mono-nerd
 ufw
 upower
@@ -55,7 +93,11 @@ wireplumber
 wl-clipboard
 wlsunset
 wtype
+xcb-util-errors
+xcb-util-renderutil
+xcb-util-wm
 xdg-desktop-portal-wlr
 xdg-user-dirs
 xdg-utils
+xorg-xwayland
 zram-generator
