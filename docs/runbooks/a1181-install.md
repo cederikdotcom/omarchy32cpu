@@ -46,23 +46,14 @@ Rehearsal lessons now baked into the steps below:
    `https://mirror.archlinux32.org/i686/$repo`, install
    archlinux32-keyring and populate it. Known rough edges: occasional
    stale package signatures and dependency drift (see gap analysis,
-   "archlinux32 findings"); the fork repo carries rebuilt overrides,
-   fontconfig 2.18.3 first (without it sway fails with `undefined
-   symbol: FcConfigSetDefaultSubstitute`), neatvnc 0.8.1 second
-   (without it wayvnc fails on `nvnc_client_get_auth_username`). If
-   installs abort on "marginal trust" signatures, run
+   "archlinux32 findings"). If installs abort on "marginal trust"
+   signatures, run
    `pacman-key --lsign-key 80EC18799E8BCD375C6E64ABE4D41569196B1160`
    (the TasosSah packaging key).
 4. `pacstrap` base, linux, linux-firmware, then the Lite core from
    `install/omarchy-base.packages` on this branch.
-5. Bootloader, inside the chroot:
-   - `grub-install --target=i386-efi --efi-directory=/boot --removable`
-     (installs `BOOTIA32.EFI`; a 32-bit kernel boots natively, no mixed
-     mode)
-   - Optional Apple boot picker entry: `grub-mkstandalone -O i386-efi -o
-     /boot/System/Library/CoreServices/boot.efi` on a blessed HFS+
-     helper partition.
-   - `grub-mkconfig -o /boot/grub/grub.cfg`
+5. Install the two i686 override packages (see "Override packages"
+   below). fontconfig is mandatory: without it sway does not start.
 6. Put the repo at /usr/share/omarchy, create the user, then run
    `omarchy-apply-system --install-user <user> --first-install` in the
    chroot (validated end to end: config, hardware, greetd login,
@@ -72,12 +63,59 @@ Rehearsal lessons now baked into the steps below:
    `cp -r /usr/share/omarchy/config/* ~/.config/`, then
    `omarchy-provision-user --first-install --force` with
    OMARCHY_PATH=/usr/share/omarchy and the fork's bin on PATH.
-8. Bootloader: `omarchy-refresh-grub` in the chroot (installs
-   BOOTIA32.EFI on first run, then writes grub.cfg).
+8. Bootloader: `omarchy-refresh-grub` in the chroot. On a first run it
+   installs GRUB as `BOOTIA32.EFI` in the removable fallback path
+   (`grub-install --target=i386-efi --efi-directory=/boot --removable
+   --no-nvram`, which needs no efibootmgr and no NVRAM access), then
+   writes grub.cfg. A 32-bit kernel boots natively from the 32-bit
+   Apple EFI; there is no mixed mode.
+   Optional Apple boot picker entry: `grub-mkstandalone -O i386-efi -o
+   /boot/System/Library/CoreServices/boot.efi` on a blessed HFS+ helper
+   partition.
 9. Reboot. greetd starts `/usr/share/omarchy/bin/omarchy-sway-launch`
    (autologin into sway with the pixman renderer). Note ufw comes up
    enforcing deny-incoming; `ufw allow` for anything you need (rules
    cannot be added from inside a chroot).
+
+## Override packages
+
+archlinux32 ships two packages that are too old for other packages in
+the same repo. Both overrides are plain Arch PKGBUILD rebuilds for
+i686: no fork source change, no patches. They are published as GitHub
+release assets on this repo, because the fork has no pacman repo of its
+own (see RELEASE-NOTES, "Missing / open items").
+
+Release: https://github.com/cederikdotcom/omarchy32cpu/releases/tag/overrides-i686-20260831
+
+```bash
+# fontconfig 2:2.18.3-2 - MANDATORY. archlinux32 ships 2:2.14.1 while its
+# pango 1:1.57.1 needs >= 2.16; without this sway dies at startup with
+# "undefined symbol: FcConfigSetDefaultSubstitute".
+sudo pacman -U https://github.com/cederikdotcom/omarchy32cpu/releases/download/overrides-i686-20260831/fontconfig-2.18.3-2-i686.pkg.tar.zst
+
+# neatvnc 0.8.1-3 - only needed for omarchy-remote-view. archlinux32 ships
+# wayvnc 0.8.0 against neatvnc 0.5.4; without this wayvnc dies with
+# "undefined symbol: nvnc_client_get_auth_username".
+sudo pacman -U https://github.com/cederikdotcom/omarchy32cpu/releases/download/overrides-i686-20260831/neatvnc-0.8.1-3-i686.pkg.tar.zst
+```
+
+Order matters for neatvnc: `pacman -S wayvnc` pulls the repo's neatvnc
+0.5.4 and clobbers the override, so install wayvnc first (it is in the
+core package list) and the override second. Both overrides carry a
+higher version than the repo package, so a later `pacman -Syu` will not
+pull them back down.
+
+Verified 2026-08-31 in an archlinux32 i686 chroot: after the neatvnc
+override, `ldd -r /usr/bin/wayvnc` reports 0 undefined symbols and
+`wayvnc --version` prints `v0.8.0-15d09b0 / neatvnc: v0.8.1-0708156`.
+
+Rebuild them yourself if you would rather not trust a release asset:
+take the Arch PKGBUILD for the package, and in an i686 chroot run
+`makepkg -A --nocheck --skippgpcheck -d`. fontconfig needs
+`-Ddoc=disabled` (the docbook DTDs are missing on archlinux32) and meson
+>= 1.11 from pip. neatvnc needs `provides=(libneatvnc.so)` in the
+PKGBUILD or pacman will refuse the install as breaking wayvnc's
+`libneatvnc.so=0-32` dependency.
 
 ## Common operations
 
