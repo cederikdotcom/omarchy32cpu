@@ -196,16 +196,12 @@ i686 install too.
 - **Storage/FDE polish** (worklist 11): `omarchy-hibernation-setup`
   (btrfs swapfile) should be dropped; `omarchy-drive-password` argon2id
   cost is not yet retuned for a 2 GB Core Duo.
-- **The foot theme template cannot satisfy both foot versions.** foot
-  1.13 (archlinux32) requires `[colors]` and rejects `[colors-dark]`;
-  foot 1.27 (Arch x86_64) deprecates `[colors]` and asks for
-  `[colors-dark]`, and rejects `[cursor].color` outright. The `[cursor]`
-  section was dropped (it was a hard error on the newer foot), so the
-  cursor now uses reversed foreground/background everywhere. The
-  remaining `[colors]` deprecation warnings - about 20 lines per
-  terminal launch on x86_64 - are cosmetic and unfixed. A correct fix
-  renders the section name from the installed foot version and the
-  theme's light/dark mode.
+- foot's colors section differs by version: foot 1.27 (Arch x86_64)
+  wants `[colors-dark]` and deprecates `[colors]`; foot 1.13
+  (archlinux32) rejects `[colors-dark]` outright. Fixed by probing the
+  installed binary with `foot --check-config` after each theme render
+  (`omarchy-theme-set-foot-section`) rather than pinning a version, so
+  both arches get a clean, warning-free terminal.
 - **Screen recording is currently broken**: `omarchy-capture-screenrecording`
   still targets gpu-screen-recorder (not shipped, and it has no
   encoder on this GPU anyway). The planned wf-recorder (CPU x264) swap

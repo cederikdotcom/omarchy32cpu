@@ -47,7 +47,6 @@ Known broken or missing right now:
 - **`omarchy-debug` does not work**: it calls `inxi`, which is not in the core package set. Use the commands under "Diagnostics" below instead.
 - **`omarchy-update` is untested and should be treated as broken.** The fork does not track upstream channels and has no package repo.
 - Several commands are deliberate stubs that print a notice and exit 0 (window transparency toggle, cursor zoom, the plugin and bar-widget system, `omarchy-bar` config subcommands). The full list is in the release notes.
-- **foot prints about 20 `deprecated: foot: [colors]: use [colors-dark] instead` lines on every launch** on Arch x86_64. foot 1.27 wants `[colors-dark]`; foot 1.13, which archlinux32 ships, rejects it and requires `[colors]`. One static theme template cannot satisfy both. The colors themselves apply correctly.
 - `systemctl restart greetd` lands on the tuigreet greeter, not back in the autologin session. That is greetd semantics, not a bug. Reboot or log in through tuigreet.
 - On i686 only: no fan daemon (mbpfan) and no webcam (isight-firmware-tools); neither is in the archlinux32 repos.
 

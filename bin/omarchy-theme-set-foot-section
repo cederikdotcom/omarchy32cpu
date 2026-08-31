@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# omarchy:summary=Match the rendered foot colors section to the installed foot version
+# omarchy:hidden=true
+
+# foot renamed [colors] to [colors-dark] when it gained light/dark theming.
+# Old foot (archlinux32 ships 1.13) rejects [colors-dark] outright; new foot
+# (1.27) accepts [colors] but prints a deprecation line per launch. Rather
+# than pin a version number, ask the installed binary which one it takes.
+
+foot_ini="$HOME/.local/state/omarchy/current/theme/foot.ini"
+
+[[ -f $foot_ini ]] || exit 0
+
+probe=$(mktemp) || exit 0
+trap 'rm -f "$probe"' EXIT
+printf '[colors-dark]\nforeground=ffffff\n' >"$probe"
+
+if foot --check-config --config "$probe" >/dev/null 2>&1; then
+  sed -i 's/^\[colors\]$/[colors-dark]/' "$foot_ini"
+else
+  sed -i 's/^\[colors-dark\]$/[colors]/' "$foot_ini"
+fi

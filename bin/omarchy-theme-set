@@ -328,6 +328,7 @@ fi
 flock -u 9
 
 post_theme_commands=(
+  omarchy-theme-set-foot-section
   omarchy-restart-terminal
   "swaymsg reload >/dev/null 2>&1"
   "pkill -SIGUSR2 -x waybar"
