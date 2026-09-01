@@ -153,9 +153,6 @@ hints=(urgency y "$urgency_byte")
 
 if [[ -n $glyph ]]; then
   hints+=(omarchy-glyph s "$glyph")
-  # mako has no renderer for the omarchy-glyph hint, so fold the glyph into
-  # the summary where it stays visible (Omarchy CPU).
-  headline="$glyph  $headline"
 fi
 
 if [[ -n $image ]]; then

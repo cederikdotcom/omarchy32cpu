@@ -43,11 +43,8 @@ contrast() {
   local sample="$2"
 
   awk -v fg="$color" -v bg="$sample" '
-    function hexdigit(c) {
-      return index("0123456789abcdef", tolower(c)) - 1
-    }
     function channel(hex, start) {
-      return (hexdigit(substr(hex, start, 1)) * 16 + hexdigit(substr(hex, start + 1, 1))) / 255
+      return strtonum("0x" substr(hex, start, 2)) / 255
     }
     function linear(c) {
       return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ^ 2.4

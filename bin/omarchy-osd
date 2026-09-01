@@ -1,90 +1,40 @@
 #!/bin/bash
 
-# omarchy:summary=Show an on-screen display as a transient mako notification
+# omarchy:summary=Show the Omarchy Quickshell on-screen display
 # omarchy:args=[-i|--icon <icon>] [-m|--message <text>] [-p|--progress <0-100>] [-d|--duration <ms>]
 # omarchy:examples=omarchy osd -i brightness -p 50 | omarchy osd -m "Hello"
-
-# Omarchy Omarchy CPU has no Quickshell OSD. The OSD is a mako notification
-# with a progress hint (mako renders int:value as a progress bar). Successive
-# calls replace the previous OSD via its notification id, kept in the runtime
-# dir, so volume/brightness key repeats update one popup instead of stacking.
 
 set -euo pipefail
 
 icon=""
 message=""
 progress=""
+progress_text=""
+max="100"
 duration=""
 
 while (($#)); do
   case $1 in
-    -i | --icon) icon="${2:-}"; shift 2 ;;
-    -m | --message) message="${2:-}"; shift 2 ;;
-    -p | --progress) progress="${2:-}"; shift 2 ;;
-    -d | --duration) duration="${2:-}"; shift 2 ;;
-    -h | --help)
-      echo "Usage: omarchy-osd [-i icon] [-m message] [-p 0-100] [-d ms]"
-      exit 0
-      ;;
+    -i|--icon) icon="${2:-}"; shift 2 ;;
+    -m|--message) message="${2:-}"; shift 2 ;;
+    -p|--progress) progress="${2:-}"; shift 2 ;;
+    -d|--duration) duration="${2:-}"; shift 2 ;;
+    -h|--help) omarchy osd --help; exit 0 ;;
     *) echo "Unknown OSD option: $1" >&2; exit 1 ;;
   esac
 done
 
-[[ $progress =~ ^[0-9]+$ ]] || progress=""
-[[ $duration =~ ^[0-9]+$ ]] || duration=2000
-
-# Icon names arrive as Quickshell-era identifiers (volume-high, brightness,
-# microphone-muted, ...). Map the common ones to a readable label; anything
-# else (including literal glyphs) is shown as-is when there is no message.
-label_for_icon() {
-  case "$1" in
-    volume* | audio*) echo "Volume" ;;
-    microphone-muted) echo "Microphone muted" ;;
-    microphone*) echo "Microphone" ;;
-    brightness*) echo "Brightness" ;;
-    keyboard*) echo "Keyboard brightness" ;;
-    reboot) echo "Rebooting" ;;
-    shutdown) echo "Shutting down" ;;
-    logout) echo "Logging out" ;;
-    *) echo "$1" ;;
-  esac
-}
-
-headline="$message"
-if [[ -z $headline && -n $icon ]]; then
-  headline=$(label_for_icon "$icon")
-fi
 if [[ -n $progress ]]; then
-  if [[ -n $headline ]]; then
-    headline="$headline ${progress}%"
-  else
-    headline="${progress}%"
-  fi
-fi
-[[ -n $headline ]] || exit 0
-
-id_file="${XDG_RUNTIME_DIR:-/tmp}/omarchy-osd.id"
-replaces_id=0
-if [[ -s $id_file ]]; then
-  replaces_id=$(<"$id_file")
-  [[ $replaces_id =~ ^[0-9]+$ ]] || replaces_id=0
+  progress_text="${progress}%"
 fi
 
-hints=(urgency y 0 transient b true)
-if [[ -n $progress ]]; then
-  hints+=(value i "$progress")
-fi
-hint_count=$((${#hints[@]} / 3))
+payload=$(jq -cn \
+  --arg icon "$icon" \
+  --arg message "$message" \
+  --arg value "$progress" \
+  --arg progressText "$progress_text" \
+  --arg max "$max" \
+  --arg duration "$duration" \
+  '{icon:$icon,message:$message,value:$value,progressText:$progressText,max:$max,duration:$duration}')
 
-# Notify directly over D-Bus (as omarchy-notification-send does) so the OSD
-# needs no libnotify. Signature susssasa{sv}i.
-out=$(busctl --user -- call \
-  org.freedesktop.Notifications /org/freedesktop/Notifications \
-  org.freedesktop.Notifications Notify susssasa{sv}i \
-  "omarchy-osd" "$replaces_id" "" "$headline" "" \
-  0 \
-  "$hint_count" "${hints[@]}" \
-  "$duration" 2>/dev/null) || exit 0
-
-# busctl prints the UINT32 return as "u <id>"; remember it for replacement.
-printf '%s\n' "${out##* }" >"$id_file" 2>/dev/null || true
+omarchy-shell -q osd show "$payload"

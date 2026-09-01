@@ -16,11 +16,11 @@ notification_server_ready() {
     GetServerInformation >/dev/null 2>&1
 }
 
-# mako claims the notification bus name on demand (D-Bus activation), so
-# ready means the bus call answers.
+# The shell has to be up to serve the IPC, and it has to have claimed the
+# notification bus name before notify-send has anywhere to deliver.
 attempts=$((timeout * 10))
-while ((attempts > 0)); do
-  if notification_server_ready; then
+while (( attempts > 0 )); do
+  if omarchy-shell notifications ping >/dev/null 2>&1 && notification_server_ready; then
     exit 0
   fi
   attempts=$((attempts - 1))

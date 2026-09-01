@@ -5,26 +5,7 @@
 # omarchy:name=lock
 # omarchy:examples=omarchy system lock
 
-# Omarchy CPU locks with swaylock: the Quickshell lock screen is gone until
-# issue #2 restores it. swaylock is an ordinary ext-session-lock client and
-# works under Hyprland unchanged. The theme pipeline renders per-theme
-# swaylock arguments (default/themed/swaylock.args.tpl) into the current
-# theme directory; fall back to a plain dark lock when absent.
-
-if ! pgrep -x swaylock >/dev/null; then
-  swaylock_args=(-f --ignore-empty-password)
-
-  theme_args="$HOME/.local/state/omarchy/current/theme/swaylock.args"
-  if [[ -f $theme_args ]]; then
-    while IFS= read -r arg; do
-      [[ -n $arg && $arg != \#* ]] && swaylock_args+=("$arg")
-    done <"$theme_args"
-  else
-    swaylock_args+=(--color 1a1a1a)
-  fi
-
-  swaylock "${swaylock_args[@]}" >/dev/null 2>&1
-fi
+omarchy-shell lock lock >/dev/null
 
 # Set keyboard layout to default (first layout)
 hyprctl switchxkblayout all 0 > /dev/null 2>&1

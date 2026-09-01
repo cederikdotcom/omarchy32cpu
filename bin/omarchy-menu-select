@@ -7,19 +7,14 @@
 # omarchy:examples=omarchy menu select Format jpg png|omarchy-menu-select Resolution 4k 1080p 720p -- --width 400
 
 # An option may lead with an icon, as "<glyph><TAB><label>", and may trail a
-# subtext, as "<glyph><TAB><label><TAB><subtext>". The menu shows the glyph
-# but never returns it. A plain option returns the label alone; an option
-# with a subtext returns "<label><TAB><subtext>", so callers with same-named
-# rows get the subtext back as the stable key.
-#
-# Omarchy CPU renders the menu with fuzzel --dmenu. Selection comes back by
-# index so display formatting never leaks into the returned value. The old
-# pixel --width/--maxheight hints are mapped onto fuzzel's character width
-# and line count.
+# subtext shown under the label, as "<glyph><TAB><label><TAB><subtext>". The
+# menu shows the glyph but never returns it. A plain option returns the label
+# alone; an option with a subtext returns "<label><TAB><subtext>", so callers
+# with same-named rows get the subtext back as the stable key.
 
 set -euo pipefail
 
-if (($# < 1)); then
+if (( $# < 1 )); then
   echo "Usage: omarchy-menu-select <prompt> [option...] [-- menu args...]" >&2
   exit 1
 fi
@@ -31,23 +26,23 @@ options=()
 menu_width=""
 menu_maxheight=""
 
-while (($# > 0)); do
+while (( $# > 0 )); do
   if [[ $1 == "--" ]]; then
     shift
-    while (($# > 0)); do
+    while (( $# > 0 )); do
       case "$1" in
         --width)
           shift
-          if (($# == 0)); then
+          if (( $# == 0 )); then
             echo "omarchy-menu-select: --width requires a value" >&2
             exit 1
           fi
           menu_width="$1"
           ;;
-        --height | --maxheight)
+        --height|--maxheight)
           arg="$1"
           shift
-          if (($# == 0)); then
+          if (( $# == 0 )); then
             echo "omarchy-menu-select: $arg requires a value" >&2
             exit 1
           fi
@@ -63,61 +58,42 @@ while (($# > 0)); do
   shift
 done
 
-if ((${#options[@]} == 0)) && [[ ! -t 0 ]]; then
+if (( ${#options[@]} == 0 )) && [[ ! -t 0 ]]; then
   mapfile -t options
 fi
 
-if ((${#options[@]} == 0)); then
+if (( ${#options[@]} == 0 )); then
   echo "Usage: omarchy-menu-select <prompt> [option...] [-- menu args...]" >&2
   exit 1
 fi
 
-# Pixel hints to fuzzel units: ~10px per character column, ~40px per row.
-fuzzel_args=(--dmenu --index --prompt "$prompt > ")
+selection_file=$(mktemp)
+done_file=$(mktemp)
+rm -f "$done_file"
+trap 'rm -f "$selection_file" "$done_file"' EXIT
 
-if [[ $menu_width =~ ^[0-9]+$ ]] && ((menu_width > 0)); then
-  chars=$((menu_width / 10))
-  ((chars < 30)) && chars=30
-  fuzzel_args+=(--width "$chars")
+options_json=$(perl -MEncode=decode -MJSON::PP=encode_json -e 'print encode_json([map { decode("UTF-8", $_) } @ARGV])' "${options[@]}")
+payload=$(perl -MEncode=decode -MJSON::PP=encode_json,decode_json -e '
+  my $payload = {
+    mode => "select",
+    prompt => decode("UTF-8", $ARGV[0]),
+    options => decode_json($ARGV[1]),
+    selectionFile => decode("UTF-8", $ARGV[2]),
+    doneFile => decode("UTF-8", $ARGV[3])
+  };
+  $payload->{width} = int($ARGV[4]) if length($ARGV[4] // "");
+  $payload->{maxHeight} = int($ARGV[5]) if length($ARGV[5] // "");
+  print encode_json($payload)
+' "$prompt" "$options_json" "$selection_file" "$done_file" "$menu_width" "$menu_maxheight")
+
+omarchy-shell shell summon omarchy.menu "$payload" >/dev/null
+
+while [[ ! -e $done_file ]]; do
+  sleep 0.05
+done
+
+if [[ -s $selection_file ]]; then
+  cat "$selection_file"
+else
+  exit 1
 fi
-
-lines=${#options[@]}
-if [[ $menu_maxheight =~ ^[0-9]+$ ]] && ((menu_maxheight > 0)); then
-  max_lines=$((menu_maxheight / 40))
-  ((max_lines < 3)) && max_lines=3
-  ((lines > max_lines)) && lines=$max_lines
-fi
-((lines < 1)) && lines=1
-((lines > 20)) && lines=20
-fuzzel_args+=(--lines "$lines")
-
-# Build display rows: "glyph  label  subtext" flattened to one line each.
-display() {
-  local option glyph label subtext rest
-  for option in "${options[@]}"; do
-    option=${option//$'\n'/ }
-    IFS=$'\t' read -r glyph label subtext rest <<<"$option"
-    if [[ -z ${label+x} || -z $label ]] && [[ $option != *$'\t'* ]]; then
-      printf '%s\n' "$glyph"
-    elif [[ -n ${subtext:-} ]]; then
-      printf '%s  %s  %s\n' "$glyph" "$label" "$subtext"
-    elif [[ -n ${label:-} ]]; then
-      printf '%s  %s\n' "$glyph" "$label"
-    else
-      printf '%s\n' "$glyph"
-    fi
-  done
-}
-
-index=$(display | fuzzel "${fuzzel_args[@]}") || exit 1
-[[ $index =~ ^[0-9]+$ ]] || exit 1
-((index < ${#options[@]})) || exit 1
-
-selection="${options[$index]}"
-if [[ $selection == *$'\t'* ]]; then
-  # Strip the leading glyph field; return label (and subtext when present).
-  selection=${selection#*$'\t'}
-fi
-
-[[ -n $selection ]] || exit 1
-printf '%s\n' "$selection"
