@@ -11,6 +11,7 @@ monitor_laptop="$ROOT/bin/omarchy-hyprland-monitor-laptop"
 monitor_external_active="$ROOT/bin/omarchy-hyprland-monitor-external-active"
 system_wake="$ROOT/bin/omarchy-system-wake"
 clamshell="$ROOT/bin/omarchy-hyprland-monitor-clamshell"
+lock_service="$ROOT/shell/plugins/lock/Service.qml"
 hw_clamshell="$ROOT/bin/omarchy-hw-clamshell"
 hw_laptop_closed="$ROOT/bin/omarchy-hw-laptop-closed"
 utilities="$ROOT/default/hypr/bindings/utilities.lua"
@@ -103,7 +104,9 @@ pass "lid switch bindings lock on close and reconcile clamshell display state"
 grep -F 'omarchy-hyprland-monitor-clamshell >/dev/null 2>&1 || true' "$system_wake" >/dev/null
 pass "system wake resyncs clamshell display state"
 
-# Upstream ends here with the Quickshell lock service, which waits for the
-# screen list to settle before it locks. Omarchy CPU locks with swaylock, an
-# ordinary ext-session-lock client with no screen-stabilizing step of its own,
-# so there is nothing here to assert; system-lock-test.sh covers the locker.
+grep -F 'lock-pending: no-real-screen' "$lock_service" >/dev/null
+grep -F 'lock-pending: screen-stabilizing' "$lock_service" >/dev/null
+grep -F 'id: sessionLockStabilizeTimer' "$lock_service" >/dev/null
+grep -Pzo 'function onScreensChanged\(\) \{\n(.*\n)*?\s*root\.requestSessionLock\(\)\n' "$lock_service" >/dev/null
+grep -F 'realScreens: root.realScreenCount()' "$lock_service" >/dev/null
+pass "lock service waits for stable real screens before session lock"

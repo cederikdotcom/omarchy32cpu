@@ -76,9 +76,6 @@ printf '[terminal.shell]\nprogram = "%s"\n' "$marker" >"$hostile/alacritty.toml"
 printf 'shell = "%s"\n' "$marker" >"$hostile/foot.ini"
 printf 'command = "%s"\n' "$marker" >"$hostile/ghostty.conf"
 printf 'hl.env("GUM_INPUT_PROMPT", "%s")\n' "$marker" >"$hostile/gum_env.lua"
-printf 'on-notify=exec %s\n' "$marker" >"$hostile/mako.ini"
-printf -- '--image=%s\n' "$marker" >"$hostile/swaylock.args"
-printf '/* %s */ @define-color background #000000;\n' "$marker" >"$hostile/waybar.css"
 printf '[bar]\nbackground = "#%s"\n' "000000" >"$hostile/shell.toml"
 printf '{}\n' >"$hostile/vscode.json"
 printf 'Yaru-red\n' >"$hostile/icons.theme"
@@ -108,7 +105,7 @@ assert_not_staged .git "the clone's own git directory is never staged"
 
 # These run code, so the theme's versions must lose to Omarchy's generated ones
 # rather than merely be absent.
-for generated in neovim.lua gum_env.lua kitty.conf alacritty.toml foot.ini ghostty.conf hyprland.lua mako.ini swaylock.args; do
+for generated in neovim.lua gum_env.lua kitty.conf alacritty.toml foot.ini ghostty.conf hyprland.lua; do
   assert_staged "$generated" "$generated is generated from Omarchy's template"
   assert_no_marker "$generated" "an installed theme cannot supply $generated"
 done
@@ -116,8 +113,6 @@ done
 # Colour is kept, including a file Omarchy would otherwise have generated.
 assert_staged shell.toml "shell.toml is staged"
 grep -q '000000' "$(staged shell.toml)" || fail "an installed theme's shell.toml colours are kept"
-assert_staged waybar.css "waybar.css is staged"
-grep -q "$marker" "$(staged waybar.css)" || fail "an installed theme's waybar.css colours are kept"
 
 grep -q 'hyprland.lua' "$test_tmp/stderr" || fail "omarchy-theme-set names the files it ignored"
 ! grep -q 'README.md' "$test_tmp/stderr" || fail "omarchy-theme-set does not report a theme's documentation"
@@ -212,8 +207,8 @@ pass "a theme name cannot climb out of the theme directories"
 # A denylist is only correct while someone adding a template classifies what it
 # generates. Every generated theme file is either denied to an installed theme or
 # recorded here as carrying colour, so a new template fails until it is placed.
-denied=(alacritty.toml foot.ini ghostty.conf gum_env.lua hyprland.lua kitty.conf mako.ini neovim.lua swaylock.args vscode.json)
-colour_only=(btop.theme chromium.theme claude.json helix.toml keyboard.rgb obsidian.css pi.json shell.toml vscode-theme.json waybar.css)
+denied=(alacritty.toml foot.ini ghostty.conf gum_env.lua hyprland.lua kitty.conf neovim.lua vscode.json)
+colour_only=(btop.theme chromium.theme claude.json helix.toml keyboard.rgb obsidian.css pi.json shell.toml vscode-theme.json)
 
 for tpl in "$ROOT"/default/themed/*.tpl; do
   generated=$(basename "$tpl" .tpl)

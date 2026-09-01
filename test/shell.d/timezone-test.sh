@@ -7,8 +7,11 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 timezone_menu="$ROOT/bin/omarchy-menu-timezone"
 sudoers_file="$ROOT/etc/sudoers.d/omarchy-tzupdate"
 
-grep -F '%wheel ALL=(root) NOPASSWD: /usr/bin/timedatectl set-timezone *' "$sudoers_file" >/dev/null ||
+grep -F '%wheel ALL=(root) NOPASSWD: /usr/bin/timedatectl ^set-timezone [A-Za-z0-9_+][A-Za-z0-9_+.-]*(/[A-Za-z0-9_+][A-Za-z0-9_+.-]*)*$' "$sudoers_file" >/dev/null ||
   fail "timezone sudoers rule allows passwordless timedatectl timezone changes"
+
+! grep -F 'set-timezone *' "$sudoers_file" >/dev/null ||
+  fail "timezone sudoers rule uses a bare wildcard that admits extra arguments like -H and -M"
 
 ! grep -F 'tzupdate' "$sudoers_file" >/dev/null ||
   fail "timezone sudoers rule does not grant passwordless tzupdate"
@@ -28,11 +31,8 @@ grep -F 'sudo timedatectl set-timezone "$timezone"' "$timezone_menu" >/dev/null 
 ! grep -Fx 'timedatectl set-timezone "$timezone"' "$timezone_menu" >/dev/null ||
   fail "timezone menu does not use bare timedatectl, which triggers polkit"
 
-# The waybar clock only re-reads the timezone on its refresh interval, so the
-# menu reloads the bar for an immediate update (the Quickshell era used
-# omarchy-shell -q omarchy.clock refresh for the same reason).
-grep -F 'omarchy-bar reload' "$timezone_menu" >/dev/null ||
-  fail "timezone menu reloads the bar so the clock updates immediately"
+grep -F 'omarchy-shell -q omarchy.clock refresh' "$timezone_menu" >/dev/null ||
+  fail "timezone menu refreshes the namespaced clock IPC target"
 
 ! grep -F 'omarchy-shell -q Clock refresh' "$timezone_menu" >/dev/null ||
   fail "timezone menu no longer refreshes the retired Clock IPC target"

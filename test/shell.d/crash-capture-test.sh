@@ -54,10 +54,17 @@ grep -F 'omarchy-crash-watch.service' "$ROOT/install/user/first-run/enable-user-
   fail "crash capture is no longer on by default for new installs"
 pass "crash capture is on by default"
 
-# The fuzzel menu reads the same JSONC definition the Quickshell menu did;
-# strip comments and trailing commas the way omarchy-menu does before asking.
-menu_json=$(sed -e 's|^[[:space:]]*//.*$||' "$ROOT/default/omarchy/omarchy-menu.jsonc" |
-  sed -z -e 's/,[[:space:]]*}/}/g' -e 's/,[[:space:]]*\]/\]/g')
-[[ $(jq -r '."trigger.toggle.crash-capture".action' <<<"$menu_json") == "omarchy-toggle-crash-capture" ]] ||
-  fail "menu toggles crash capture from Trigger > Toggle"
-pass "menu toggles crash capture from Trigger > Toggle"
+# Parse the menu definition with the shell's own parser, so this asserts against
+# what the Quickshell menu will actually load rather than a second reading of it.
+run_node_test <<'JS'
+const fs = require('fs')
+const menu = requireFromRoot('shell/plugins/menu/MenuModel.js')
+const items = menu.parseMenuJsonc(fs.readFileSync(path.join(root, 'default/omarchy/omarchy-menu.jsonc'), 'utf8'))
+const byId = Object.fromEntries(items.map(item => [item.id, item]))
+
+assertEqual(
+  byId['trigger.toggle.crash-capture'].action,
+  'omarchy-toggle-crash-capture',
+  'menu toggles crash capture from Trigger > Toggle'
+)
+JS

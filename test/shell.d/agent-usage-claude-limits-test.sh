@@ -211,3 +211,33 @@ pass "Claude collector re-probes on --force despite a fresh cache"
 [[ $(jq -c '[.cached.limits[].percent]' <<<"$forced") == "[0.44]" ]] ||
   fail "Claude collector caches a successful probe" "$forced"
 pass "Claude collector caches a successful probe"
+
+# The panel reads a window out of a label, and that guess cannot survive a
+# model name — "Opus 5 (1M context)" parses as a one-minute window. A collector
+# that states the title outright is taken at its word.
+run_node_test <<'JS'
+const fs = require('fs')
+const source = fs.readFileSync(root + '/shell/plugins/agents/Panel.qml', 'utf8')
+const start = source.indexOf('function windowIsLong')
+const end = source.indexOf('// The window that decides')
+assert(start > 0 && end > start, 'agents panel exposes its limit-window helpers')
+eval(source.slice(start, end))
+
+assertDeepEqual(
+  limitWindows({ limits: [
+    { label: 'Session (5-hour)', percent: 0.78, resetsAt: '' },
+    { label: 'Opus 5 (1M context) Weekly', title: 'Opus 5 (1M context) Weekly', percent: 0.42, resetsAt: '' }
+  ] }),
+  [
+    { title: 'Session', percent: 0.78, resetAt: '' },
+    { title: 'Opus 5 (1M context) Weekly', percent: 0.42, resetAt: '' }
+  ],
+  'agents panel titles a limit off the collector when it states one'
+)
+
+assertDeepEqual(
+  limitWindows({ limits: [{ label: 'Weekly (7-day)', percent: 0.12, resetsAt: '' }] }),
+  [{ title: 'Weekly', percent: 0.12, resetAt: '' }],
+  'agents panel still reads a window out of a label that carries no title'
+)
+JS
