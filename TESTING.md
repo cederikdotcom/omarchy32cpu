@@ -40,8 +40,9 @@ the trap to know about: the variable is `QT_QUICK_BACKEND=software`.
 `QSG_RHI_BACKEND=software` is **not** a valid Qt setting - Qt prints
 `Unknown key "software"` and quietly falls back to the default backend,
 which on any machine with Mesa is llvmpipe. The desktop then looks
-perfectly correct while using about 250 MB more memory. So a working
-shell does not prove CPU rendering. Prove it with:
+perfectly correct while using about 440 MB more memory - 234 MB against
+698 MB in this VM, on the same wallpaper. So a working shell does not
+prove CPU rendering. Prove it with:
 
 ```bash
 QSG_INFO=1 quickshell -p /usr/share/omarchy/shell 2>&1 | grep -i backend
@@ -61,12 +62,35 @@ run without shaders - tray icon colorization, the lock screen's blurred
 wallpaper, and two masked reveals in the wallpaper and image pickers.
 Everything still works; those four just render unembellished.
 
-**The memory question is open and it is the most useful thing to report
-from a real machine.** The shell measured 245 MB RSS in an x86_64 VM
-during the spike and 264 MB on a freshly booted 1280x800 session of the
-installed tree, against 96 MB for the shim stack it replaced. On a 2 GB
-MacBook that is affordable but not free, and nobody has measured it
-there.
+**Memory: the shell does not leak, but its size follows the
+wallpaper.** Measured in the x86_64 VM at 1280x800 with
+`QT_QUICK_BACKEND=software`. Idle is flat - 46 samples over 15 minutes
+moved between 233.4 and 234.1 MB RSS and drifted no direction. What
+moves the number is the background: the shell decodes it at its full
+stored resolution and holds it, so
+
+    RSS ~= 190 MB + the decoded size of the current wallpaper
+
+and the wallpapers this repo ships decode to between 6 MB
+(1536x1024) and 138 MB (10456x3455), median 32 MB. That gives
+234 MB on the default theme, 350 MB on the largest shipped
+background, and a 491 MB peak while a theme switch crossfades - the
+old, incoming and base copies are resident at once. Switching away
+releases all of it; four crossfade cycles landed within 140 kB of each
+other, so there is nothing accumulating.
+
+Against 96 MB for the shim stack it replaced, and that stack also had
+no lock screen, idle daemon or notification server.
+
+Worth knowing before you blame the software scenegraph for any of
+this: the same shell in the same VM with `QT_QUICK_BACKEND` unset,
+taking Qt's default path through llvmpipe, sits at 698 MB. CPU
+rendering is not what costs the memory here, it is what saves it.
+
+**Still unmeasured on i686 and on real hardware**, and a hardware
+report carrying these numbers is worth more than any further VM work.
+If RAM is tight on a 2 GB machine, the lever is the wallpaper, not the
+plugin set.
 
 ## What works today
 

@@ -147,14 +147,26 @@ Rehearsal lessons now baked into the steps below:
    mismatch. Pin those two if you are not prepared to rebuild.
 
    RAM is the open question on this machine, not correctness. The
-   x86_64 spike measured the full shell at 245 MB RSS; the shim stack
-   it replaces (waybar + mako + swaybg) was 96 MB, so expect roughly
-   +150 MB on a 2 GB machine. zram makes that affordable but not free,
-   and a good slice of it is image caching in the Background and
-   ImagePicker plugins. If it is too much, trim the plugin set before
-   giving up on the shell. **This has not been measured on the real
-   MacBook** - it is exactly the kind of number a hardware report
-   should carry.
+   x86_64 VM measures the full shell at 234 MB RSS on the default
+   theme against 96 MB for the shim stack it replaces (waybar + mako +
+   swaybg), so expect roughly +140 MB on a 2 GB machine. It does not
+   leak: idle is flat over fifteen minutes.
+
+   What it does do is hold the wallpaper at full decoded size, so
+   `RSS ~= 190 MB + the decoded size of the current background`. The
+   backgrounds under `themes/` decode to between 6 MB (1536x1024) and
+   138 MB (10456x3455), which on the largest one means 350 MB steady
+   and a 491 MB peak while a theme switch crossfades. On a 1280x800
+   panel none of that resolution is visible. **If RAM is tight here,
+   the lever is the wallpaper, not the plugin set**: point the theme at
+   a background scaled to the panel and the shell drops back to about
+   195 MB. zram makes the rest affordable but not free.
+
+   Do not drop `libvips`. Without it the image picker cannot build
+   thumbnails and falls back to the full-resolution originals, which is
+   how a single theme becomes several hundred MB. **None of this has
+   been measured on the real MacBook** - it is exactly the kind of
+   number a hardware report should carry.
 6. Put the repo at /usr/share/omarchy, create the user, then run
    `omarchy-apply-system --install-user <user> --first-install` in the
    chroot (validated end to end: config, hardware, greetd login,

@@ -114,7 +114,11 @@ graphics API (`opengl`/`vulkan`/`d3d11`/`metal`/`null`), and Qt answers
 `Unknown key "software" for QSG_RHI_BACKEND, falling back to default
 backend`. On any machine with Mesa the default then succeeds through
 llvmpipe, so the desktop comes up looking correct while costing about
-250 MB more RSS. **A working shell is not evidence of CPU rendering.**
+**440 MB more RSS** - measured in this VM, same wallpaper, same
+1280x800: 234 MB on the software backend against 672 MB fresh and
+698 MB settled through llvmpipe, which loads `libgallium` and
+`libEGL_mesa` and still opens no `/dev/dri` descriptor. **A working
+shell is not evidence of CPU rendering.**
 Verify with `QSG_INFO=1` and look for `Loading backend software` and no GL
 context. `bin/omarchy-hyprland-launch` sets the variable for the whole
 session and carries that warning in a comment.
@@ -155,10 +159,12 @@ What the fork still owns here:
   There is no `ShaderEffect` and no particle system anywhere in `shell/`,
   so that is the complete list.
 
-Measured in the x86_64 VM (1280x800, TCG): the shell is 245 MB RSS at
-0.1 % idle CPU, against 96 MB for the waybar+mako+swaybg stack it
-replaces - but it also subsumes swaylock and swayidle, so the real delta
-is about +150 MB. Menu open is 0.49 s end to end, of which 0.29 s is the
+Measured in the x86_64 VM (1280x800, TCG): the shell is 234 MB RSS
+(208 MB PSS) on the default theme at 0.1 % idle CPU, against 96 MB for
+the waybar+mako+swaybg stack it replaces - but it also subsumes
+swaylock and swayidle, so the real delta is about +140 MB. That single
+number is not the whole story; see "What the shell's memory actually
+does" below. Menu open is 0.49 s end to end, of which 0.29 s is the
 `quickshell ipc` client process starting, which a keybinding into the
 running shell does not pay. Damage-limited animation costs 0.5 % in
 Hyprland; a fullscreen alpha repaint every frame saturates one core, and
@@ -177,12 +183,85 @@ directions. No `waybar`, `mako`, `swaybg`, `swayidle`, `swaylock` or
 zero QML errors and `QSG_INFO=1` prints exactly one scenegraph line,
 `Loading backend software`; its process maps no Mesa driver and holds no
 `/dev/dri` descriptor. Fresh RSS on that boot was **264 MB** (PSS
-238 MB), close to the spike's 245 MB and above it because the plugin set
-is fully loaded rather than newly started.
+238 MB).
 
-**Not yet re-validated on i686, and never on real hardware.** The
-245 MB figure on a 2 GB MacBook is the open question, and a hardware
-report carrying it would be worth more than any further VM work.
+## What the shell's memory actually does
+
+That boot was later read as a leak: the same process measured 469 MB
+after fourteen minutes and a 650 MB `VmHWM`. It is not a leak. The
+fourteen minutes are the giveaway - the shell started at 08:48:17 and
+`~/.local/state/omarchy/current/theme.name` was rewritten at 09:02:42,
+fourteen minutes and twenty-five seconds later. The number moved
+because the theme changed, not because time passed.
+
+Measured properly, on the software backend at 1280x800:
+
+- **Idle does not grow.** 46 samples over 15 minutes: 233.4 to
+  234.1 MB RSS, no direction, `VmHWM` never re-reached after startup,
+  JS heap flat at 9.5 MB, mapping count flat at 1203.
+- **The wallpaper is the variable**, and it is the whole variable.
+  `shell/plugins/background/Background.qml:221` loads the background
+  with no `sourceSize`, so Qt decodes it at its stored resolution and
+  keeps it. Swapping a 1536x1024 background (6 MB decoded) for a
+  10456x3455 one (138 MB decoded) moved RSS from 208.7 MB to 349.8 MB:
+  a 141 MB step for a 138 MB image. The model is
+  `RSS ~= 190 MB + the decoded size of the current wallpaper`.
+- **It is released.** Four crossfade cycles between those two
+  backgrounds returned 349752 / 349684 / 349820 / 349820 kB on the big
+  one - a spread of 136 kB. Nothing accumulates.
+- **Crossfade is the peak.** `VmHWM` reached 491 MB, because the base,
+  outgoing and incoming copies are all resident during the transition.
+
+- **CPU rendering is not what costs the memory - it is what saves it.**
+  The same shell was run again in the same VM with `QT_QUICK_BACKEND`
+  unset, so Qt took its default RHI path and Mesa fell through to
+  llvmpipe (`libgallium` and `libEGL_mesa` mapped, still no `/dev/dri`
+  descriptor). Idle plateaus on both. Everything else is worse on GL:
+
+  | | software | llvmpipe |
+  |---|---|---|
+  | fresh start | 234 MB | 673 MB |
+  | settled idle, default theme | 234 MB | 701 MB |
+  | 6 MB wallpaper | 209 MB | 623 MB |
+  | 138 MB wallpaper | 350 MB | 946 MB |
+  | back to the 6 MB wallpaper | **209 MB** | **992 MB** |
+  | peak `VmHWM` over three cycles | 491 MB | **1480 MB** |
+
+  Two things separate the columns. The marginal cost of a wallpaper is
+  1.04x its decoded pixels under the software scenegraph - one copy -
+  and 2.39x under llvmpipe, which keeps the CPU-side image *and* a
+  texture, and honours the `mipmap: true` that `Background.qml` asks
+  for on the transition frames and the software backend ignores. And
+  the software backend gives it *back*: swap the big background out and
+  RSS returns to 208700 / 208700 / 214260 kB, while llvmpipe never
+  comes down at all - 989612 / 995108 / 991876 kB for the same 6 MB
+  wallpaper, within a few MB of its own peak, and its `VmHWM` climbs
+  every cycle (1135, 1469, 1480 MB).
+
+  So the software scenegraph is not a memory tax to be apologised for.
+  On a 2 GB machine the GL path would take a third of RAM at idle and
+  1.4 GB across a few theme switches; the software one is what makes
+  the target viable. If anything here deserves the word leak, it is on
+  the GL path, and it is not the path this fork ships.
+
+So the honest figures for this VM are **234 MB steady on the default
+theme, 350 MB on the largest background this repo ships, and 491 MB
+peak across a theme switch**. The backgrounds under `themes/` decode to
+between 6 and 138 MB, median 32 MB, and their format is irrelevant to
+this: upstream's webp conversion (`a4219f8f`) kept every image's exact
+pixel dimensions, so it saves disk and not one byte of RAM.
+
+`jemalloc` is Quickshell's allocator, not glibc's - `malloc` resolves
+into `libjemalloc.so.2`. That matters when reading a dump: `malloc_info`
+reports an empty arena and `malloc_trim` frees nothing, which looks like
+a glibc leak and is neither. Purging every jemalloc arena
+(`mallctl("arena.4096.purge")`) released zero bytes, which is what
+proves the resident pages are live image data rather than retained free
+space.
+
+**Not yet re-validated on i686, and never on real hardware.** Those
+figures on a 2 GB MacBook are the open question, and a hardware report
+carrying them would be worth more than any further VM work.
 
 ## Validated (cloud bench: i686 chroot + QEMU with IA32 OVMF firmware)
 
