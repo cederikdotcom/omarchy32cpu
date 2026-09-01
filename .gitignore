@@ -2,3 +2,26 @@
 # Python bytecode (orchestrator)
 __pycache__/
 *.pyc
+
+# Build outputs and packages never belong in this repo. The i686 override
+# packages (fontconfig, neatvnc, quickshell, the hypr stack) and any locally
+# built binaries are published as GitHub release assets instead - see
+# docs/runbooks/a1181-install.md. Keep build trees outside the worktree.
+*.pkg.tar.zst
+*.pkg.tar.xz
+*.tar.gz
+*.tar.zst
+*.deb
+*.rpm
+*.iso
+*.img
+*.qcow2
+*.o
+*.so
+*.so.*
+*.a
+build/
+_build/
+dist/
+pkg/
+src/*/
