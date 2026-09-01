@@ -75,7 +75,6 @@ libpulse
 libxcb
 libxcursor
 libxkbcommon
-libxml2-legacy
 linux
 linux-firmware
 lua

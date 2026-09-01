@@ -37,7 +37,7 @@ you can send** - what your machine is, and what did or did not come up.
 | Upstream | This fork | Why |
 |---|---|---|
 | Hyprland on GLES 3.0+ | the same Hyprland on a pixman (CPU) renderer | zero-GPU compositing |
-| Quickshell desktop | waybar, fuzzel, mako, swaylock behind shims | no Qt GL |
+| Quickshell desktop on Qt GL | the same Quickshell on Qt's software scenegraph | no GPU for Qt either |
 | SDDM greeter | greetd + tuigreet, autologin session | no GL at login |
 | limine + 64-bit UKI | GRUB i386-efi as BOOTIA32.EFI | 32-bit Apple EFI |
 | Arch x86_64 + pkgs.omarchy.org | archlinux32 i686 + fork overrides | 32-bit CPU |

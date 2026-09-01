@@ -251,7 +251,6 @@ Not verified, and the reason this runbook exists:
 Two known cosmetic issues on this path, both already understood:
 
 - **foot prints deprecation warnings on every launch.** foot 1.27 (Arch) wants `[colors-dark]` where the fork's theme template writes `[colors]`, which is what foot 1.13 (archlinux32) requires. One static template cannot satisfy both, so the newer foot logs about 20 `deprecated:` lines per terminal. The colors themselves apply correctly. Do not report this.
-- **`libxml2-legacy`** is in the package list because archlinux32's waybar links `libxml2.so.2` while that repo ships libxml2 2.15. Arch has the package too, so it installs cleanly, but it is probably unnecessary on x86_64. It is left in so both architectures share one list.
 
 ## Troubleshooting
 
