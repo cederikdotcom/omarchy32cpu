@@ -35,6 +35,27 @@ fi
 export HYPRLAND_RENDERER=pixman
 export AQ_FORCE_ALLOCATOR=dumb
 
+# Qt Quick draws the Omarchy shell (Quickshell) on the CPU. This is the
+# scenegraph ADAPTATION, and the only variable that selects it is
+# QT_QUICK_BACKEND.
+#
+# DO NOT "fix" this to QSG_RHI_BACKEND=software. That variable picks an RHI
+# graphics API (opengl/vulkan/d3d11/metal/null); "software" is not one of its
+# values, so Qt logs
+#
+#   Unknown key "software" for QSG_RHI_BACKEND, falling back to default backend.
+#
+# and then silently renders through the default backend. On any machine that
+# has Mesa installed that default succeeds via llvmpipe, so the desktop still
+# comes up and looks correct while costing ~250 MB more RSS -- a passing shell
+# is NOT evidence of CPU rendering. Confirm the real thing with QSG_INFO=1 and
+# look for "Loading backend software" and no GL context.
+#
+# Exported here so every session child inherits it: the shell is started by
+# default/hypr/autostart.lua through the compositor, and omarchy-restart-shell
+# respawns it the same way.
+export QT_QUICK_BACKEND=software
+
 # Don't die when libinput briefly reports no input devices.
 export WLR_LIBINPUT_NO_DEVICES=1
 
