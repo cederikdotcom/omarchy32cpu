@@ -24,7 +24,7 @@ The renderer needs two environment variables, both set by `omarchy-hyprland-laun
 
 Everything in this list is evidence-backed. The detail, including every bug found and fixed while establishing it, is in [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md); the render-floor proofs and screenshots are in [`docs/pixman-renderer/`](docs/pixman-renderer/).
 
-- **The x86_64 path boots to a working desktop in a QEMU VM with no GPU.** 64-bit UEFI -> GRUB -> kernel -> greetd -> the compositor with the pixman renderer, waybar, swaybg, mako, the fuzzel menu on `Super+Space` and foot on `Super+Return`. Screenshot: [`docs/pixman-renderer/x86_64-vm.png`](docs/pixman-renderer/x86_64-vm.png). Details in [`docs/runbooks/install-x86_64.md`](docs/runbooks/install-x86_64.md).
+- **The x86_64 path boots to a working desktop in a QEMU VM with no GPU.** 64-bit UEFI -> GRUB -> kernel -> greetd -> the compositor with the pixman renderer, waybar, swaybg, mako, the fuzzel menu on `Super+Space` and foot on `Super+Return`. Screenshot: [`docs/pixman-renderer/x86_64-hyprland.png`](docs/pixman-renderer/x86_64-hyprland.png). Details in [`docs/runbooks/install-x86_64.md`](docs/runbooks/install-x86_64.md).
 
 - **The boot chain**, rehearsed end to end in a QEMU VM with 32-bit UEFI firmware: firmware -> `BOOTIA32.EFI` -> GRUB -> i686 kernel -> greetd -> the compositor on the display.
 - **`omarchy-apply-system --install-user <user> --first-install`** runs to exit 0 in an i686 target chroot: config, hardware, greetd login and post-install phases.

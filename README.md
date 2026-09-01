@@ -78,7 +78,7 @@ Proven on the sway session, and now pending a rerun:
 - **x86_64**, in a VM with no GPU: the same procedure boots to the same
   desktop with the pixman renderer, menu and terminal working.
   Screenshot:
-  [`docs/pixman-renderer/x86_64-vm.png`](docs/pixman-renderer/x86_64-vm.png).
+  [`docs/pixman-renderer/x86_64-hyprland.png`](docs/pixman-renderer/x86_64-hyprland.png).
 
 Not yet run on the physical MacBook (the GMA 950 render floor is the open
 hardware question), nor on any real x86_64 machine.
