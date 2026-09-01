@@ -42,6 +42,17 @@
 # vulkan-headers -- headers only, there is no runtime Vulkan requirement) are
 # deliberately absent: they belong on the build host, not on a MacBook.
 # libgbm, which quickshell's screencopy needs, comes from mesa on both arches.
+#
+# libvips is a RUNTIME dependency of the shell too, and the least obvious one.
+# The image picker under shell/plugins/image-picker does not read the theme
+# backgrounds directly: bin/omarchy-menu-images shrinks each one to 1536x864
+# with vipsthumbnail first, and list.sh hands the picker that thumbnail. With
+# no vipsthumbnail every generation fails, list.sh falls back to the ORIGINAL,
+# and the picker decodes it at full size into a cache it never releases. The
+# backgrounds this repo ships are 6 to 138 MB once decoded, so a single theme
+# can cost several hundred MB. On a 2 GB MacBook that is the difference
+# between a working picker and an OOM. x86_64 has 8.18, archlinux32 has 8.11;
+# both carry vipsthumbnail with --size and --smartcrop.
 
 base
 bat
@@ -72,6 +83,7 @@ libei
 libinput
 libliftoff
 libpulse
+libvips
 libxcb
 libxcursor
 libxkbcommon
