@@ -16,7 +16,7 @@ That is the target experience: Hyprland on the pixman (CPU) renderer, the Quicks
 
 Until now this fork substituted sway for Hyprland, because Hyprland needs GLES 3.0 and the target has no GPU. That reason is gone: this fork's [Hyprland](https://github.com/cederikdotcom/Hyprland/tree/pixman-renderer) and [aquamarine](https://github.com/cederikdotcom/aquamarine/tree/cpu-backend) branches add a pixman (CPU) renderer, and it composites headless, nested, and on a real DRM display in the i686 VM at 0.05 % idle CPU. So sway is deleted and the upstream Hyprland session is back.
 
-**"What works today" below was proven on the sway session.** On **x86_64 it has been proven again on Hyprland**, on 2026-08-31: a VM installed from this tree boots, greetd starts the session itself, and `hyprctl systeminfo` says `Renderer: pixman (software)`, with the bar, the menu, the keybindings and theme switching all working. **On i686 it has not been re-proven yet.** Since then the shim desktop has been replaced by the real Quickshell shell (see "The shell is Quickshell again" below), which has been proven on x86_64 in a VM but **not** on i686 and **not** on hardware. So on the MacBook path, treat the list as what the stack did rather than what it does, and a report that one of those items no longer works is especially useful.
+**"What works today" below was proven on the sway session.** On **x86_64 it has been proven again on Hyprland**, on 2026-08-31, and a third time with the real Quickshell desktop on 2026-09-01: a VM installed from this tree boots, greetd starts the session itself, `hyprctl systeminfo` says `Renderer: pixman (software)`, and the Quickshell bar, the Omarchy menu on a real `Super+Space`, notifications and theme switching all work with Qt on its software scenegraph. **On i686 none of it has been re-proven yet**, and none of it on hardware. So on the MacBook path, treat the list as what the stack did rather than what it does, and a report that one of those items no longer works is especially useful.
 
 The renderer needs two environment variables, both set by `omarchy-hyprland-launch`: `HYPRLAND_RENDERER=pixman` picks the software renderer and `AQ_FORCE_ALLOCATOR=dumb` makes aquamarine allocate DRM dumb buffers. A stock Hyprland ignores both and then dies on the missing GLES 3.0, so the Hyprland and aquamarine binaries have to come from the fork build.
 
@@ -62,9 +62,11 @@ wallpaper, and two masked reveals in the wallpaper and image pickers.
 Everything still works; those four just render unembellished.
 
 **The memory question is open and it is the most useful thing to report
-from a real machine.** The shell measured 245 MB RSS in an x86_64 VM,
-against 96 MB for the shim stack it replaced. On a 2 GB MacBook that is
-affordable but not free, and nobody has measured it there.
+from a real machine.** The shell measured 245 MB RSS in an x86_64 VM
+during the spike and 264 MB on a freshly booted 1280x800 session of the
+installed tree, against 96 MB for the shim stack it replaced. On a 2 GB
+MacBook that is affordable but not free, and nobody has measured it
+there.
 
 ## What works today
 

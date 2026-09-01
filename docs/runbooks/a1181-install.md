@@ -221,8 +221,8 @@ PKGBUILD or pacman will refuse the install as breaking wayvnc's
 ## Common operations
 
 - Refresh boot entries after a kernel update: `omarchy-refresh-grub`.
-- Theme switch: `omarchy-theme-set <name>` (renders hyprland/waybar/
-  mako templates).
+- Theme switch: `omarchy-theme-set <name>` (renders the hyprland
+  template and hands the palette to the running shell over IPC).
 - Fan control: mbpfan as a service; temps via `sensors` (applesmc).
 - Remote view: `omarchy-remote-view on` (or menu: Trigger > Toggle >
   Remote View) serves the session on 127.0.0.1:5901; from another

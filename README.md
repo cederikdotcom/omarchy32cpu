@@ -70,14 +70,15 @@ Proven on the pixman renderer itself (see
 Hyprland composites headless, nested, and on a real DRM display inside the
 i686 VM, damage-driven, at 0.05 % idle CPU.
 
-Proven on the sway session, and now pending a rerun:
+Proven end to end:
 
 - **i686**, on a bench that mimics the MacBook1,1 (32-bit CPU model,
   2 GB RAM, IA32 UEFI firmware): the fork's own installer builds a
-  system that boots to a themed desktop with zero failed units.
-- **x86_64**, in a VM with no GPU: the same procedure boots to the same
-  desktop with the pixman renderer, menu and terminal working.
-  Screenshot:
+  system that boots to a themed desktop with zero failed units. Proven
+  on the sway session and pending a rerun on Hyprland + Quickshell.
+- **x86_64**, in a VM with no GPU: the same procedure boots to the
+  Quickshell desktop with the pixman renderer, greetd starting the
+  session itself, and Qt Quick on its software scenegraph. Screenshot:
   [`docs/pixman-renderer/x86_64-hyprland.png`](docs/pixman-renderer/x86_64-hyprland.png).
 
 Not yet run on the physical MacBook (the GMA 950 render floor is the open
@@ -90,7 +91,7 @@ hardware question), nor on any real x86_64 machine.
 - [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md) - the honest
   contract: what is validated, every bug found and fixed during
   validation, what is missing, and what this stack can never do
-  (screen sharing, animations, the upstream plugin system)
+  (screen sharing, animations, shader effects)
 - [`docs/a1181-gap-analysis.md`](docs/a1181-gap-analysis.md) - the
   verified gap matrix and the worklist that drove the port
 - [`docs/runbooks/install-x86_64.md`](docs/runbooks/install-x86_64.md) -
@@ -104,8 +105,9 @@ hardware question), nor on any real x86_64 machine.
 ## Caveats, honestly
 
 No screen sharing ever (pixman has no screencast path). No hardware
-video decode, no Vulkan, no animations or blur. The upstream plugin
-system (Quickshell QML) is incompatible. Updates do not track
+video decode, no Vulkan, no animations or blur. Four `MultiEffect` uses
+in the shell render unembellished, because the software scenegraph has
+no shaders. Updates do not track
 upstream; on i686 the fork carries its own package overrides
 (fontconfig, neatvnc) because archlinux32 has real dependency drift -
 x86_64 needs neither. See the release notes for the full list.

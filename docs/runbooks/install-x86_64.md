@@ -213,7 +213,7 @@ Verified on 2026-08-31 against official Arch x86_64 (`core` and `extra` from `ge
 - **`omarchy-provision-user --first-install --force` exits 0** and lands the Tokyo Night theme in `~/.local/state/omarchy/current/`.
 - **`omarchy-refresh-grub` installs `BOOTX64.EFI`** and writes a grub.cfg with working kernel entries.
 - **The whole chain boots**: 64-bit OVMF firmware -> `BOOTX64.EFI` -> GRUB -> kernel -> greetd -> the autologin session on the display, with `systemd` reaching `graphical.target`.
-- **The desktop works.** `docs/pixman-renderer/x86_64-vm.png` is a screenshot of that VM: the compositor, waybar, swaybg with the Tokyo Night background, two mako notifications, the fuzzel menu open on `Super+Space`, and a foot terminal opened with `Super+Return`.
+- **The desktop works.** The screenshot of that VM taken at the time showed the compositor, waybar, swaybg with the Tokyo Night background, two mako notifications, the fuzzel menu open on `Super+Space`, and a foot terminal opened with `Super+Return`. That was the shim desktop; `docs/pixman-renderer/x86_64-hyprland.png` now carries the Quickshell one instead (see the 2026-09-01 block below).
 
 The renderer is worth restating: that is a full desktop drawn with the CPU, on a `-vga std` bochs framebuffer with no GPU acceleration available at all.
 
@@ -227,6 +227,20 @@ Re-verified on the Hyprland session on 2026-08-31, on the same bench and the sam
 - **Theme switching retints Hyprland.** `omarchy-theme-set Gruvbox` moves `general:col.active_border` from `ff7aa2f7` to `ff7daea3`, and the theme survives a reboot.
 
 The package list, the boot chain, `omarchy-apply-system` and `omarchy-refresh-grub` were unaffected by the compositor swap and were re-run anyway as part of this.
+
+Re-verified again on 2026-09-01, after the shim desktop was replaced by the real Quickshell shell, on the same VM. This run installed the tree over `/usr/share/omarchy`, re-ran step 6 and step 7, and rebooted, so everything below came up under greetd rather than by hand:
+
+- **Every name in `install/omarchy-base.packages` was already present** in the target after the shim packages left the list and the `qt6-*` set joined it: 80 of 80 resolved, nothing to install.
+- **greetd starts the Quickshell desktop.** The process tree is `Hyprland --watchdog-fd 4` and `quickshell -n -p /usr/share/omarchy/shell`, started by `default/hypr/autostart.lua` through `omarchy-launch-shell`. No `waybar`, `mako`, `swaybg`, `swayidle`, `swaylock` or `fuzzel` process exists, and `systemctl --failed` is empty.
+- **The shell loads clean.** Zero QML errors. The only warnings are environmental in a VM: no `xdg-desktop-portal` settings interface, no `bluetoothd`, and one duplicate portal app-ID registration.
+- **Qt is on the software scenegraph.** With `QSG_INFO=1` exported through `~/.config/omarchy/session-env`, the shell's journal carries exactly one scenegraph line, `qt.scenegraph.general: Loading backend software`, and no OpenGL or RHI line at all. `/proc/<shell>/maps` matches no Mesa driver, `libGL.so.*`, gallium, llvmpipe or Vulkan entry, and the process holds no `/dev/dri` descriptor.
+- **Real key events reach the shell.** `Super+Space` (a QEMU `sendkey meta_l-spc`, not an IPC dispatch) opens the Omarchy menu, which renders its ten root rows with their icons.
+- **Notifications work.** `omarchy-notification-send` renders a toast through the shell's own notification server, and `omarchy-shell notifications dismissAll` clears the stack.
+- **Theme switching retints the shell in both directions.** `omarchy-theme-set "Catppuccin Latte"` turns the bar, the menu and the wallpaper light; `omarchy-theme-set "Tokyo Night"` turns them back.
+- **Memory.** The shell is 264 MB RSS (238 MB PSS) on a freshly booted 1280x800 session.
+- **The plugin system is live**: `omarchy-plugin-catalog` enumerates the 37 first-party plugins.
+
+One timing note for slow machines: `omarchy-theme-set` hardlinks the two wallpapers into `~/.cache/omarchy/background-transitions` and deletes them three seconds later, while the shell loads them asynchronously for the crossfade. Under TCG that window is occasionally too short and the shell logs `Cannot open .../next-<pid>.png`. Only the crossfade is lost: `Background.qml` applies the palette from a 300 ms fallback timer, so the retint itself still lands. It is upstream's own timing assumption and is left alone.
 
 Not verified, and the reason this runbook exists:
 

@@ -13,14 +13,15 @@ or any real hardware at all.
 replaces sway" immediately below: every session-level result recorded
 further down was obtained with sway.
 
-**Re-obtained on Hyprland for x86_64 on 2026-08-31.** A VM installed from
-this tree by the x86_64 runbook boots, greetd starts the session itself,
-and `hyprctl systeminfo` reports `Renderer: pixman (software)` on the DRM
-backend against a `-vga std` framebuffer with no GPU. waybar, mako,
-swaybg and swayidle come up, 414 keybindings load, Super+Return opens a
-terminal, Super+Space opens the Omarchy menu, and switching themes
-retints Hyprland's own borders. Screenshot:
-`docs/pixman-renderer/x86_64-vm.png`. The i686 session is the same
+**Re-obtained on Hyprland for x86_64 on 2026-08-31, and again with the
+Quickshell desktop on 2026-09-01.** A VM installed from this tree by the
+x86_64 runbook boots, greetd starts the session itself, and `hyprctl
+systeminfo` reports `Renderer: pixman (software)` and `Backend: drm`
+against a `-vga std` framebuffer with no GPU. The Quickshell bar, the
+Omarchy menu on `Super+Space`, the shell's own wallpaper, its
+notifications and live theme switching all work, and the shell's process
+maps no Mesa driver and holds no `/dev/dri` descriptor. Screenshot:
+`docs/pixman-renderer/x86_64-hyprland.png`. The i686 session is the same
 exercise on the harder architecture and has not been run yet; nothing
 below about i686 or real hardware has changed.
 
@@ -162,6 +163,22 @@ is about +150 MB. Menu open is 0.49 s end to end, of which 0.29 s is the
 running shell does not pay. Damage-limited animation costs 0.5 % in
 Hyprland; a fullscreen alpha repaint every frame saturates one core, and
 that is precisely the case flat mode already avoids.
+
+**Validated end to end from this tree on 2026-09-01** (x86_64 VM, no
+GPU): the repo was installed over `/usr/share/omarchy`, the install
+stages re-run, and the machine rebooted so **greetd** started the session
+through `initial_session`. What that session shows, in
+`docs/pixman-renderer/x86_64-hyprland.png`: the Quickshell bar, the
+Omarchy menu opened by a real `Super+Space` key event with its icons
+drawn, a live notification from the shell's own server, and the shell's
+own wallpaper. Switching themes retints bar, menu and wallpaper in both
+directions. No `waybar`, `mako`, `swaybg`, `swayidle`, `swaylock` or
+`fuzzel` process exists, and no systemd unit failed. The shell loads with
+zero QML errors and `QSG_INFO=1` prints exactly one scenegraph line,
+`Loading backend software`; its process maps no Mesa driver and holds no
+`/dev/dri` descriptor. Fresh RSS on that boot was **264 MB** (PSS
+238 MB), close to the spike's 245 MB and above it because the plugin set
+is fully loaded rather than newly started.
 
 **Not yet re-validated on i686, and never on real hardware.** The
 245 MB figure on a 2 GB MacBook is the open question, and a hardware
