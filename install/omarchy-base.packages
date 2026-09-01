@@ -22,6 +22,26 @@
 # provides them on both arches rather than the list installing two different
 # stacks. Everything below is the shared runtime the fork binaries link
 # against, and that a repo package would have pulled in for us.
+#
+# NOT IN THIS LIST FOR THE SAME REASON: quickshell, which draws the Omarchy
+# desktop (bar, menu, notifications, OSD, wallpaper, lock screen, tray and the
+# whole plugin system under shell/). Upstream installs it from
+# pkgs.omarchy.org; it is in neither official Arch nor archlinux32, so a tester
+# builds it from source:
+#
+#   quickshell   github.com/quickshell-mirror/quickshell, tag v0.3.1
+#
+# Build commands, per arch, are in docs/runbooks/install-x86_64.md and
+# docs/runbooks/a1181-install.md. Quickshell links PRIVATE Qt APIs and must be
+# rebuilt whenever qt6-base or qt6-declarative is upgraded, or it crashes on an
+# ABI mismatch -- so pin those two if you are not prepared to rebuild.
+#
+# The qt6-* entries below, plus jemalloc, glib2, libxcb and wayland, are that
+# build's RUNTIME dependencies. Its build-only dependencies (cmake, ninja,
+# pkgconf, cli11, qt6-shadertools, spirv-tools, wayland-protocols and
+# vulkan-headers -- headers only, there is no runtime Vulkan requirement) are
+# deliberately absent: they belong on the build host, not on a MacBook.
+# libgbm, which quickshell's screencopy needs, comes from mesa on both arches.
 
 base
 bat
@@ -35,14 +55,15 @@ fastfetch
 fd
 fontconfig
 foot
-fuzzel
 fzf
 git
+glib2
 greetd
 greetd-tuigreet
 grim
 grub
 gum
+jemalloc
 jq
 lcms2
 libdisplay-info
@@ -51,13 +72,13 @@ libei
 libinput
 libliftoff
 libpulse
+libxcb
 libxcursor
 libxkbcommon
 libxml2-legacy
 linux
 linux-firmware
 lua
-mako
 mesa
 muparser
 neovim
@@ -73,21 +94,22 @@ polkit
 polkit-gnome
 psmisc
 qrencode
+qt6-base
+qt6-declarative
+qt6-svg
+qt6-wayland
 re2
 ripgrep
 seatd
 slurp
 starship
 sudo
-swaybg
-swayidle
-swaylock
 tmux
 tomlplusplus
 ttf-jetbrains-mono-nerd
 ufw
 upower
-waybar
+wayland
 wayvnc
 wireplumber
 wl-clipboard
