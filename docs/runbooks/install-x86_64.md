@@ -35,7 +35,7 @@ You need an Arch install medium and the standard Arch install knowledge. This is
    pacstrap -K /mnt $(grep -v '^#' /path/to/omarchy32cpu/install/omarchy-base.packages | grep -v '^$')
    ```
 
-   That is the same 58-package list the MacBook uses. It pulls in roughly 250 packages with dependencies. If you have not cloned the repo yet, `pacstrap -K /mnt base linux linux-firmware git` first, then clone it inside the target and rerun `pacstrap` with the list.
+   That is the same 80-package list the MacBook uses. It pulls in roughly 250 packages with dependencies. If you have not cloned the repo yet, `pacstrap -K /mnt base linux linux-firmware git` first, then clone it inside the target and rerun `pacstrap` with the list.
 
 4. The usual Arch system files, before anything else runs:
 
@@ -110,7 +110,48 @@ You need an Arch install medium and the standard Arch install knowledge. This is
 
    The Hyprland build installs its own `hyprland.desktop` and `hyprland-uwsm.desktop` into `/usr/local/share/wayland-sessions/`. Neither sets `HYPRLAND_RENDERER=pixman`, so picking either one in the greeter gives you a black screen on a machine with no GPU. The installer puts the working entry at `/usr/share/wayland-sessions/omarchy.desktop`; delete upstream's two if you do not want them offered.
 
-10. Reboot. greetd starts `/usr/share/omarchy/bin/omarchy-hyprland-launch`, which sets `HYPRLAND_RENDERER=pixman` and `AQ_FORCE_ALLOCATOR=dumb` and autologs `<user>` into Hyprland.
+10. **Install the shell.** The Omarchy desktop is Quickshell: the bar, the menu, notifications, the OSD, the wallpaper, the lock screen, the tray and the whole plugin system are QML under `shell/`. Quickshell is in neither official Arch nor archlinux32 (upstream installs it from `pkgs.omarchy.org`), so this is the second thing the fork cannot yet package, and it is built from source exactly like the compositor.
+
+    Its runtime dependencies are already in `install/omarchy-base.packages`. Its build-only dependencies are not, because they belong on the build host rather than on the target:
+
+    ```bash
+    arch-chroot /mnt pacman -S --needed --asdeps \
+      cmake ninja pkgconf git cli11 qt6-shadertools spirv-tools \
+      wayland-protocols vulkan-headers
+    ```
+
+    `vulkan-headers` is headers only. Quickshell needs it to compile its screencopy support; there is no runtime Vulkan requirement, and nothing here asks the GPU for anything.
+
+    ```bash
+    git clone --depth 1 --branch v0.3.1 \
+      https://github.com/quickshell-mirror/quickshell /mnt/opt/quickshell
+    arch-chroot /mnt bash -c 'cd /opt/quickshell &&
+      cmake -GNinja -B build -DCMAKE_BUILD_TYPE=Release \
+        -DDISTRIBUTOR="omarchy32cpu" \
+        -DCRASH_HANDLER=OFF \
+        -DINSTALL_QML_PREFIX=lib/qt6/qml &&
+      ninja -C build &&
+      ninja -C build install'
+    ```
+
+    About five minutes at `-j8`. `-DCRASH_HANDLER=OFF` is deliberate: the handler needs `cpptrace`, which archlinux32 does not carry, and keeping one build recipe for both arches is worth more here than the crash reporter. On x86_64 you may drop that flag if you also install `cpptrace`.
+
+    **Quickshell links private Qt APIs.** It must be rebuilt whenever `qt6-base` or `qt6-declarative` is upgraded, or it dies on an ABI mismatch. If you are not prepared to rebuild it, pin those two packages.
+
+    Verify before rebooting:
+
+    ```bash
+    arch-chroot /mnt quickshell --version    # Quickshell 0.3.1 ... distributed by omarchy32cpu
+    ```
+
+11. Reboot. greetd starts `/usr/share/omarchy/bin/omarchy-hyprland-launch`, which sets `HYPRLAND_RENDERER=pixman`, `AQ_FORCE_ALLOCATOR=dumb` and `QT_QUICK_BACKEND=software`, and autologs `<user>` into Hyprland.
+
+    That third variable is what makes Quickshell draw on the CPU, and it is easy to get wrong. `QT_QUICK_BACKEND=software` selects Qt Quick's software scenegraph. `QSG_RHI_BACKEND=software` does **not**: that variable picks a graphics API (`opengl`/`vulkan`/`d3d11`/`metal`/`null`), `software` is not one of its values, and Qt answers `Unknown key "software" for QSG_RHI_BACKEND, falling back to default backend`. On a machine with Mesa installed the default backend then succeeds through llvmpipe, so the desktop still comes up and looks right while costing about 250 MB more RSS. A working shell is not by itself evidence of CPU rendering. Check it properly:
+
+    ```bash
+    QSG_INFO=1 quickshell -p /usr/share/omarchy/shell 2>&1 | grep -i backend
+    # qt.scenegraph.general: Loading backend software
+    ```
 
 ## Test target A: a QEMU VM with no GPU
 

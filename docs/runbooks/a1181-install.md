@@ -16,6 +16,13 @@ requires 5.5. All of those have to be built for i686 alongside the two
 override packages below. Open items: that build, and the on-hardware
 GPU spike.
 
+The Quickshell desktop is back as well, so step 5c is new too: the shell
+under `shell/` is the real upstream QML again, drawn by Qt Quick's
+software scenegraph on top of the pixman compositor. It builds and runs
+on i686, with two features switched off (audio and the crash handler)
+for want of new enough archlinux32 packages. Its cost on a 2 GB machine
+is the one number nobody has measured yet.
+
 Rehearsal lessons now baked into the steps below:
 - Set `Architecture = i686` in /etc/pacman.conf of the installed system
   (the default `auto` misdetects in chroots) and write a real
@@ -36,7 +43,7 @@ Rehearsal lessons now baked into the steps below:
 
 - Target: MacBook1,1 (early 2006 Core Duo, A1181, EMC 2092) on
   archlinux32 i686. 2 GB RAM cap; max it (2x1 GB).
-- Omarchy Lite: no preinstalled applications. The 55-package core is
+- Omarchy Lite: no preinstalled applications. The 80-package core is
   listed in the gap analysis.
 
 ## Prepare install media
@@ -82,6 +89,72 @@ Rehearsal lessons now baked into the steps below:
    tomlplusplus, mesa, xorg-xwayland) is in the repos and in the core
    package list. Until a fork package repo exists this step is
    manual.
+5c. Build and install the shell. The Omarchy desktop is Quickshell: the
+   bar, menu, notifications, OSD, wallpaper, lock screen, tray and the
+   whole plugin system are QML under `shell/`. Quickshell is in neither
+   official Arch nor archlinux32 (upstream installs it from
+   pkgs.omarchy.org), so it is the second thing the fork cannot package
+   and is built from source like the compositor.
+
+   Its runtime dependencies are in the core package list already. Its
+   build-only dependencies are not, and all of them exist on
+   archlinux32:
+
+   ```bash
+   pacman -S --needed --asdeps cmake ninja pkgconf git cli11 \
+     qt6-shadertools spirv-tools wayland-protocols vulkan-headers
+   ```
+
+   `vulkan-headers` is headers only; there is no runtime Vulkan
+   requirement, which matters on a machine whose GPU never had it.
+
+   ```bash
+   git clone --depth 1 --branch v0.3.1 \
+     https://github.com/quickshell-mirror/quickshell /opt/quickshell
+   cd /opt/quickshell
+   cmake -GNinja -B build -DCMAKE_BUILD_TYPE=Release \
+     -DDISTRIBUTOR="omarchy32cpu" \
+     -DCRASH_HANDLER=OFF \
+     -DSERVICE_PIPEWIRE=OFF \
+     -DINSTALL_QML_PREFIX=lib/qt6/qml
+   ninja -C build && ninja -C build install
+   ```
+
+   Two flags are i686-specific and both cost a feature:
+
+   - `-DSERVICE_PIPEWIRE=OFF` because archlinux32 ships pipewire
+     0.3.65 and Quickshell's pipewire service needs
+     `pw_core_events.bound_props`, which is newer. Without it the
+     build fails; with it `omarchy.audio` has no source and the bar
+     has no volume control. Building a newer pipewire as a third i686
+     override package is the way out, and has not been done.
+   - `-DCRASH_HANDLER=OFF` because the handler needs `cpptrace`,
+     which archlinux32 does not carry at all.
+
+   **Also install the icu75 shim**, or Quickshell will not start:
+   archlinux32's `qt6-base` 6.7.2 was built against ICU 75 and links
+   `libicui18n.so.75`, while the repo's `icu` is 78. This is the same
+   class of drift as the fontconfig and libxml2 problems below, but
+   archlinux32 already carries the legacy package, so it needs no
+   override of ours:
+
+   ```bash
+   pacman -S icu75
+   ```
+
+   **Quickshell links private Qt APIs** and must be rebuilt whenever
+   `qt6-base` or `qt6-declarative` is upgraded, or it dies on an ABI
+   mismatch. Pin those two if you are not prepared to rebuild.
+
+   RAM is the open question on this machine, not correctness. The
+   x86_64 spike measured the full shell at 245 MB RSS; the shim stack
+   it replaces (waybar + mako + swaybg) was 96 MB, so expect roughly
+   +150 MB on a 2 GB machine. zram makes that affordable but not free,
+   and a good slice of it is image caching in the Background and
+   ImagePicker plugins. If it is too much, trim the plugin set before
+   giving up on the shell. **This has not been measured on the real
+   MacBook** - it is exactly the kind of number a hardware report
+   should carry.
 6. Put the repo at /usr/share/omarchy, create the user, then run
    `omarchy-apply-system --install-user <user> --first-install` in the
    chroot (validated end to end: config, hardware, greetd login,

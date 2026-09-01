@@ -34,13 +34,15 @@ The full Omarchy workflow with every pixel drawn by the CPU:
 
 - upstream Hyprland, on this fork's pixman (CPU) renderer, with every
   effect it cannot draw turned off
-- waybar + fuzzel + mako + swaylock replace the Quickshell desktop,
-  behind shims that keep the omarchy-* calling contracts
+- the upstream Quickshell desktop, unmodified, drawn by Qt Quick's
+  software scenegraph (`QT_QUICK_BACKEND=software`) on top of that
+  renderer - bar, menu, notifications, OSD, wallpaper, lock screen,
+  tray and the plugin system
 - greetd + tuigreet replace SDDM (with upstream-style autologin into
   the session)
 - GRUB i386-efi as BOOTIA32.EFI replaces limine + 64-bit UKI
 - archlinux32 i686 repos replace Arch x86_64 + pkgs.omarchy.org
-- No preinstalled applications: a 55-package core, the user installs
+- No preinstalled applications: an 80-package core, the user installs
   their own apps
 - Kept unchanged: the 24-color theme engine, the bash environment, the
   omarchy CLI router, keybinding philosophy, zram/oomd memory tuning
@@ -73,16 +75,16 @@ owns:
   blur and shadows off, so that is the whole flat-mode diff. The
   renderer logs a warning naming any of these left on.
 - **Session entry.** `bin/omarchy-hyprland-launch` (replacing
-  `omarchy-hyprland-launch`) exports `HYPRLAND_RENDERER=pixman` and
-  `AQ_FORCE_ALLOCATOR=dumb`, sources upstream's own
+  `omarchy-hyprland-launch`) exports `HYPRLAND_RENDERER=pixman`,
+  `AQ_FORCE_ALLOCATOR=dumb` and `QT_QUICK_BACKEND=software`, sources upstream's own
   `default/uwsm/env.d/10-omarchy` for the OMARCHY_PATH/PATH/TERMINAL
   bootstrap, maps `/etc/vconsole.conf` onto `XKB_DEFAULT_*`, and pins
   the systemd user bus. uwsm itself does not come back: it is not
   packaged for archlinux32, and this fork logs in through greetd
   rather than SDDM.
-- **Autostart.** `default/hypr/autostart.lua` still starts swaybg and
-  swayidle in place of the Quickshell wallpaper and hypridle, and
-  still skips udiskie, which the Lite package set does not carry.
+- **Autostart.** `default/hypr/autostart.lua` now differs from upstream
+  by one omission: udiskie, which the Lite package set does not carry.
+  The swaybg and swayidle stand-ins are gone (see "Quickshell returns").
 - **No preinstalled-app bindings.** `config/hypr/hyprland.lua` sets
   upstream's own `omarchy_preinstalled_bindings = false`.
 - **Packages.** Hyprland and aquamarine are not in
@@ -90,6 +92,80 @@ owns:
   a fork package repo exists. The list carries the shared runtime they
   link instead. On archlinux32 their hypr* dependencies and lua 5.5
   have to be built too.
+
+## Quickshell returns, and the shim desktop is retired (2026-09-01)
+
+waybar + fuzzel + mako + swaybg + swaylock are gone. `shell/` is back
+from upstream **byte-identical, all 175 files**, and the omarchy-* shims
+that faked its IPC over those programs are upstream's scripts again.
+
+This was possible because Qt Quick has a CPU scenegraph, and the spike on
+issue #2 proved the real upstream shell runs on it over this fork's pixman
+Hyprland with **zero QML changes**: it loads with no QML errors, all 37
+plugins register, 20 IPC targets come up, and `Quickshell.Hyprland` needs
+nothing. Restoring the compositor first is what made the shell free -
+the planned port from `Quickshell.Hyprland` to `Quickshell.I3` was never
+needed.
+
+**The environment variable is `QT_QUICK_BACKEND=software`, and only that.**
+`QSG_RHI_BACKEND=software` is not a Qt value: that variable selects an RHI
+graphics API (`opengl`/`vulkan`/`d3d11`/`metal`/`null`), and Qt answers
+`Unknown key "software" for QSG_RHI_BACKEND, falling back to default
+backend`. On any machine with Mesa the default then succeeds through
+llvmpipe, so the desktop comes up looking correct while costing about
+250 MB more RSS. **A working shell is not evidence of CPU rendering.**
+Verify with `QSG_INFO=1` and look for `Loading backend software` and no GL
+context. `bin/omarchy-hyprland-launch` sets the variable for the whole
+session and carries that warning in a comment.
+
+What came back verbatim from upstream: all of `shell/` (175 files);
+`bin/omarchy-shell`, `-bar`, `-bar-text-color`, `-menu`, the nine
+`omarchy-menu-*` scripts, the four `omarchy-notification-*` scripts,
+`-osd`, `-system-lock`, `-launch-shell`, `-restart-shell` and
+`-toggle-bar` (20 scripts); `etc/sudoers.d/omarchy-tzupdate`; and 50 test
+files. `bin/omarchy-shell-config` and `bin/omarchy-plugin-catalog` were
+already upstream's and simply started working again once `shell/` existed.
+
+The plugin system is therefore live again, which was the other half of
+issue #2: `omarchy-menu-plugin` is upstream's real implementation rather
+than a stub, and `omarchy-plugin-add/enable/clone/remove` have something
+to render into.
+
+What the fork still owns here:
+
+- **Packages.** `quickshell` is not in `install/omarchy-base.packages`,
+  for the same reason Hyprland is not: it exists in neither official Arch
+  nor archlinux32. It is the fork's **second** unpackageable component and
+  is built from source per the runbooks. Its runtime dependencies (the
+  `qt6-*` set, `jemalloc`, `glib2`, `libxcb`, `wayland`) are in the list
+  and verified on both arches.
+- **i686 build flags.** `-DSERVICE_PIPEWIRE=OFF` (archlinux32's pipewire
+  0.3.65 predates the API Quickshell's audio service needs, so 32-bit has
+  no `omarchy.audio` until a newer pipewire is built) and
+  `-DCRASH_HANDLER=OFF` (`cpptrace` is absent on archlinux32; kept off on
+  x86_64 too so both arches share one recipe). i686 also needs the
+  `icu75` legacy package, because its `qt6-base` 6.7.2 links
+  `libicui18n.so.75` against a repo `icu` of 78 - the same drift class as
+  the fontconfig and libxml2 problems.
+- **Four `MultiEffect` uses** are the only shader-dependent QML in the
+  tree (tray icon colorization, lock blur, and two masked reveals in
+  Background and ImagePicker). The software backend cannot run them. All
+  four are cosmetic and three are effects flat mode disables anyway.
+  There is no `ShaderEffect` and no particle system anywhere in `shell/`,
+  so that is the complete list.
+
+Measured in the x86_64 VM (1280x800, TCG): the shell is 245 MB RSS at
+0.1 % idle CPU, against 96 MB for the waybar+mako+swaybg stack it
+replaces - but it also subsumes swaylock and swayidle, so the real delta
+is about +150 MB. Menu open is 0.49 s end to end, of which 0.29 s is the
+`quickshell ipc` client process starting, which a keybinding into the
+running shell does not pay. Damage-limited animation costs 0.5 % in
+Hyprland; a fullscreen alpha repaint every frame saturates one core, and
+that is precisely the case flat mode already avoids.
+
+**Not yet re-validated on i686, and never on real hardware.** The
+245 MB figure on a 2 GB MacBook is the open question, and a hardware
+report carrying it would be worth more than any further VM work.
 
 ## Validated (cloud bench: i686 chroot + QEMU with IA32 OVMF firmware)
 
@@ -247,6 +323,19 @@ i686 install too.
   That is a stopgap, not a repo. Future i686 rebuilds (mbpfan,
   isight-firmware-tools, drift fixes) still want a real hosted pacman
   repo wired into default/pacman/*.conf.
+- **Two components cannot be packaged at all yet, and must be built from
+  source by every tester.** This is the single biggest install-friction
+  item in the fork:
+  1. **Hyprland + aquamarine** (this fork's branches), because the pixman
+     renderer exists nowhere else.
+  2. **quickshell** 0.3.1, because it is in neither official Arch nor
+     archlinux32 - upstream gets it from pkgs.omarchy.org, which serves
+     x86_64 only. Exact build commands per arch are in
+     `docs/runbooks/install-x86_64.md` (step 10) and
+     `docs/runbooks/a1181-install.md` (step 5c). Note that Quickshell
+     links private Qt APIs and has to be rebuilt on every `qt6-base` /
+     `qt6-declarative` upgrade, so a fork repo needs to rebuild it in
+     lockstep with Qt rather than merely host it once.
 - **No install ISO.** The install path is: boot the archlinux32 ISO,
   partition, pacstrap the core list, put the repo at /usr/share/omarchy,
   create the user, run omarchy-apply-system. The ISO-layer duties are
@@ -318,12 +407,16 @@ i686 install too.
 
 ### Downgraded to stubs (print a notice, exit 0)
 
-- `omarchy-hyprland-window-transparency-toggle`,
-  `-single-square-aspect-toggle`, `-monitor-internal-mirror`
-- The Quickshell plugin/bar-widget system (`omarchy-menu-plugin`,
-  bar widget IPC, panel apps: media source switch, speedtest, wifiqr,
-  weather panels, idle status)
-- `omarchy-bar` Quickshell config subcommands (use/reset/position/...)
+- `omarchy-hyprland-window-transparency-toggle` and
+  `-single-square-aspect-toggle`
+
+That is the whole list now. The Quickshell plugin and bar-widget system,
+the panel apps (media source switch, speedtest, wifiqr, weather, idle
+status), `omarchy-menu-plugin` and the `omarchy-bar` config subcommands
+are all real again - see "Quickshell returns" above.
+`omarchy-hyprland-monitor-internal-mirror` was already upstream's code
+after the compositor swap; only its menu row was missing, and that is
+back too.
 
 The Hyprland-only bindings the sway port had to drop (pseudotile,
 maximize, universal copy/paste key injection, cursor zoom) and monitor
