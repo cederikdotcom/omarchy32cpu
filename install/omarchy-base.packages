@@ -23,6 +23,16 @@
 # stacks. Everything below is the shared runtime the fork binaries link
 # against, and that a repo package would have pulled in for us.
 #
+# `ldd` on the fork's Hyprland is the authority on that runtime, and it is
+# easy to read one entry short: the compositor links libzip and libxml2 as
+# well as the obvious pixman/cairo/pango set. libzip is in the list below.
+# libxml2 is NOT, because it needs a different package name per arch: the
+# binaries want libxml2.so.2, official Arch and archlinux32 both ship
+# libxml2 2.15 with soname .16, and the compatibility package is
+# libxml2-legacy. A 2026-09-02 i686 rehearsal installed the whole list and
+# still could not start the compositor for want of it, so the i686 runbook
+# names it as a required extra alongside icu75.
+#
 # NOT IN THIS LIST FOR THE SAME REASON: quickshell, which draws the Omarchy
 # desktop (bar, menu, notifications, OSD, wallpaper, lock screen, tray and the
 # whole plugin system under shell/). Upstream installs it from
@@ -87,6 +97,7 @@ libvips
 libxcb
 libxcursor
 libxkbcommon
+libzip
 linux
 linux-firmware
 lua
