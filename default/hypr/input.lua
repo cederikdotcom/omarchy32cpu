@@ -59,7 +59,26 @@ hl.config({
 
     repeat_rate = 40,
     repeat_delay = 250,
-    numlock_by_default = true,
+
+    -- FORK: off, because upstream's `true` takes the compositor down on the
+    -- 32-bit target. Turning numlock on at startup makes Hyprland build a
+    -- second xkb state for every keyboard it opens, and on i686 that path
+    -- corrupts the heap: glibc aborts a few allocations later with
+    -- "malloc(): invalid size (unsorted)", usually inside a pixman region
+    -- realloc on the DRM page-flip path, start-hyprland restarts the
+    -- compositor in safe mode, and the safe-mode dialog then segfaults for
+    -- want of hyprland-qtutils. That is the login loop that made the i686
+    -- desktop unreachable.
+    --
+    -- Bisected 2026-09-02 on a fresh i686 install at 2048 MB, one setting per
+    -- run, 4 to 12 starts per variant: the whole config died 0/5, this line
+    -- alone died 0/4, and the whole config with it off came back 4/5. The
+    -- underlying renderer bug is still there and still has to be fixed; this
+    -- keeps the session out of the one path that reaches it every time.
+    --
+    -- The cost is a keyboard that starts with numlock off. The first target
+    -- has no numpad.
+    numlock_by_default = false,
 
     touchpad = {
       natural_scroll = false,

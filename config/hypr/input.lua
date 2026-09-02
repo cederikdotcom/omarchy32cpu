@@ -16,7 +16,9 @@
 --     repeat_rate = 40,
 --     repeat_delay = 250,
 --
---     -- Start with numlock on by default.
+--     -- Start with numlock on by default. Omarchy CPU ships this OFF: on the
+--     -- 32-bit target it takes the compositor down at login. See the comment
+--     -- in default/hypr/input.lua before you turn it back on.
 --     numlock_by_default = true,
 --
 --     -- Increase sensitivity for mouse/trackpad (default: 0).
