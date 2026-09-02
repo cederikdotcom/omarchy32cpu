@@ -121,6 +121,24 @@ hl.config({
   cursor = {
     hide_on_key_press = true,
     warp_on_change_workspace = 1,
+
+    -- Off because it takes the compositor down on the 32-bit target.
+    -- The default writes the cursor theme into gsettings so GTK apps follow
+    -- it, and glib routes that write through dconf. archlinux32 ships a dconf
+    -- built against a newer glib2 than the repo has (dconf-service dies with
+    -- "undefined symbol: g_variant_builder_init_static"), so the write lands
+    -- on a backend whose service cannot start and corrupts the compositor's
+    -- heap: Hyprland aborts with "malloc(): invalid size (unsorted)" a few
+    -- steps later, start-hyprland restarts it in safe mode, and the safe-mode
+    -- dialog then segfaults for want of hyprland-qtutils. That is a fatal
+    -- login loop, and this one line is the whole difference between it and a
+    -- session. Same dependency-drift class as the fontconfig, libxml2,
+    -- neatvnc and icu75 problems.
+    --
+    -- The cost is that GTK apps do not pick the cursor theme up from
+    -- gsettings. XCURSOR_THEME still reaches every Wayland client, and this
+    -- fork preinstalls no GTK apps.
+    sync_gsettings_theme = false,
   },
 
   binds = {
