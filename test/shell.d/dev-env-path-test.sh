@@ -43,10 +43,34 @@ trap 'rm -rf "$tmpdir"' EXIT
 home="$tmpdir/home"
 mkdir -p "$tmpdir/active/bin" "$tmpdir/unrelated/bin"
 
-# Test against a copy so the test controls /etc/omarchy.conf without mutating the host.
-bootstrap="$tmpdir/env-bootstrap"
-sed "s#/etc/omarchy.conf#$tmpdir/omarchy.conf#g" "$ROOT/default/bash/env-bootstrap" >"$bootstrap"
+assert_path_absent() {
+  local path_value="$1"
+  local entry="$2"
+  local description="$3"
 
+  case ":$path_value:" in
+    *":$entry:"*) fail "$description" "PATH unexpectedly contains $entry in $path_value" ;;
+    *) pass "$description" ;;
+  esac
+}
+
+# Test against a copy so the test controls /etc/omarchy.conf without mutating the
+# host. The packaged-command probe is redirected the same way: this fork prepends
+# on package-less installs, so whether the prepend happens depends on a path that
+# exists on a real install and not on a checkout. Rewriting it here exercises both
+# branches on any host, instead of letting the host decide which one runs.
+bootstrap="$tmpdir/env-bootstrap"
+packaged_command="$tmpdir/usr/bin/omarchy"
+mkdir -p "$(dirname "$packaged_command")"
+sed -e "s#/etc/omarchy.conf#$tmpdir/omarchy.conf#g" \
+    -e "s#/usr/bin/omarchy#$packaged_command#g" \
+    "$ROOT/default/bash/env-bootstrap" >"$bootstrap"
+
+# Default mode, no omarchy package on disk. Upstream leaves PATH alone here,
+# because its package symlinks omarchy-* into /usr/bin. This fork has no package
+# yet (see the no-package-repo entry in .github/divergence/registry.json), so
+# nothing would be on PATH at all and Hyprland keybindings could not dispatch a
+# single omarchy command. It prepends instead.
 printf 'export OMARCHY_PATH="/usr/share/omarchy"\n' >"$tmpdir/omarchy.conf"
 mapfile -t default_result < <(run_bootstrap bash "$bootstrap" "$home" "$tmpdir/unrelated/bin:/usr/bin")
 default_path=${default_result[1]}
@@ -56,7 +80,21 @@ pass "env-bootstrap resolves default OMARCHY_PATH"
 assert_path_present "$default_path" "$tmpdir/unrelated/bin" "env-bootstrap preserves PATH entries in default mode"
 assert_path_present "$default_path" "$home/.local/share/mise/shims" "env-bootstrap appends mise shims"
 assert_path_present "$default_path" "$home/.local/bin" "env-bootstrap appends ~/.local/bin"
-assert_path_first "$default_path" "$tmpdir/unrelated/bin" "env-bootstrap appends user-level paths after existing entries"
+assert_path_first "$default_path" "/usr/share/omarchy/bin" "env-bootstrap prepends the shipped bin when no omarchy package provides it"
+
+# The same default mode once a package does provide the command. This is the
+# no-op the fork's comment promises, and the branch that has to keep working for
+# the day the fork ships PKGBUILDs: upstream's behaviour, restored by the probe
+# rather than by editing this file again.
+printf '#!/bin/sh\n' >"$packaged_command"
+chmod +x "$packaged_command"
+mapfile -t packaged_result < <(run_bootstrap bash "$bootstrap" "$home" "$tmpdir/unrelated/bin:/usr/bin")
+packaged_path=${packaged_result[1]}
+rm -f "$packaged_command"
+
+assert_path_first "$packaged_path" "$tmpdir/unrelated/bin" "env-bootstrap appends user-level paths after existing entries"
+assert_path_absent "$packaged_path" "/usr/share/omarchy/bin" "env-bootstrap leaves PATH alone when the omarchy package owns /usr/bin"
+assert_path_present "$packaged_path" "$home/.local/bin" "env-bootstrap still appends user-level paths in packaged mode"
 
 printf 'export OMARCHY_PATH="%s"\n' "$tmpdir/active" >"$tmpdir/omarchy.conf"
 mapfile -t linked_result < <(run_bootstrap bash "$bootstrap" "$home" "$tmpdir/unrelated/bin:/usr/bin")

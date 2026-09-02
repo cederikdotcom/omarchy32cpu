@@ -223,10 +223,11 @@
         "install/config/omarchy-path.sh",
         "install/config/memory-tuning.sh",
         "default/bash/env-bootstrap",
+        "test/shell.d/dev-env-path-test.sh",
         "test/shell.d/config-test.sh",
         "test/shell.d/unowned-system-paths-test.sh"
       ],
-      "handling": "Everything upstream's omarchy pacman package drops into /etc is installed by the config stage instead: /etc/profile.d/omarchy.sh, the zram generator drop-in, the oomd config and app.slice kill candidacy, the sysctl reclaim and file-watcher tuning, and the zswap tmpfiles rule. default/bash/env-bootstrap prepends $OMARCHY_PATH/bin when no /usr/bin/omarchy exists, because nothing symlinks the commands. The two tests that require an omarchy-pkgs checkout skip instead of failing, and say how to re-arm them (OMARCHY_PKGS_PATH).",
+      "handling": "Everything upstream's omarchy pacman package drops into /etc is installed by the config stage instead: /etc/profile.d/omarchy.sh, the zram generator drop-in, the oomd config and app.slice kill candidacy, the sysctl reclaim and file-watcher tuning, and the zswap tmpfiles rule. default/bash/env-bootstrap prepends $OMARCHY_PATH/bin when no /usr/bin/omarchy exists, because nothing symlinks the commands. The two tests that require an omarchy-pkgs checkout skip instead of failing, and say how to re-arm them (OMARCHY_PKGS_PATH). test/shell.d/dev-env-path-test.sh redirects the packaged-command probe into its own tmpdir so it exercises both the package-less prepend and the packaged no-op on any host, rather than letting the host decide which branch runs.",
       "rationale": "There is no fork package repository yet, so a fresh install came up with no zram, no swap, stock oomd thresholds and no omarchy-* on PATH while every document in the tree said otherwise - the wrong way round on the 2 GB machine this fork exists for. All of it collapses back to upstream's shape once the fork ships PKGBUILDs, which makes this the entry with the clearest exit condition.",
       "shared_with": [
         "packages-core"
