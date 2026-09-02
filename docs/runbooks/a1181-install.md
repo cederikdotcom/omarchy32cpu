@@ -8,7 +8,7 @@ with no hand-holding: the bar, the tray, the clock, the theme wallpaper, a
 terminal on `Super+Return` and the Omarchy menu on `Super+Space`. `hyprctl
 systeminfo` reports `Renderer: pixman (software)` and `Backend: drm`, the shell
 holds no `/dev/dri` descriptor, zero systemd units failed, and 491 MB of the
-2 GB is in use.
+2 GB is in use. Five cold boots out of five landed on the desktop.
 
 Screenshot: [`../pixman-renderer/i686-greetd-desktop.png`](../pixman-renderer/i686-greetd-desktop.png).
 
@@ -30,16 +30,16 @@ browser and archlinux32 carries none of them.
 | archlinux32 i686 ISO, 2024.07.10 or later | `mirror.archlinux32.org/archisos/` | the install medium |
 | `fontconfig-2.18.3-2-i686.pkg.tar.zst` | [overrides-i686-20260831](https://github.com/cederikdotcom/omarchy32cpu/releases/tag/overrides-i686-20260831) | **mandatory**, the text stack |
 | `neatvnc-0.8.1-4-i686.pkg.tar.zst` | the same release | optional, `omarchy-remote-view` |
-| `omarchy32cpu-stack-i686-<date>.tar.zst` | the same release | **mandatory**, the compositor and the shell |
+| `omarchy32cpu-stack-i686-20260902.tar.zst` | the same release | **mandatory**, the compositor and the shell |
 | this repository | `git clone https://github.com/cederikdotcom/omarchy32cpu` | `/usr/share/omarchy` |
 
 The stack tarball is the compositor (this fork's Hyprland and aquamarine, with
-the pixman renderer), the Quickshell desktop, and the fifteen dependencies
-neither Arch nor archlinux32 packages at a usable version. It is a prebuilt
-i686 tree because building it is not a step, it is a project: sixteen
-components, `cmake` and `meson` from pip, and a patch to
-wayland-protocols. On a 2006 Core Duo that is a day of compiling. Build it
-yourself only if you have a reason to; see "Rebuilding the stack" at the end.
+the pixman renderer), the Quickshell desktop, and the fourteen dependencies
+that archlinux32 has either missing or far too old. It is a prebuilt i686 tree
+because building it is not a step, it is a project: seventeen components,
+`cmake` and `meson` from pip, and a patch to wayland-protocols. On a 2006 Core
+Duo that is a day of compiling. Build it yourself only if you have a reason to;
+see "Rebuilding the stack" at the end.
 
 **Take `neatvnc-0.8.1-4`, not `-3`.** The `-3` asset cannot be installed at
 all: it was built without `provides=(libneatvnc.so)`, so pacman refuses it with
@@ -158,7 +158,8 @@ arch-chroot /mnt passwd
 `omarchy-hyprland-launch` reads the keyboard layout out of it and maps it onto
 `XKB_DEFAULT_*`, so what you put there is what the desktop gets.
 
-Then the initramfs, which the runbook used to say nothing about:
+Then the initramfs. `pacstrap` already tried and failed to build it, so this is
+not optional:
 
 ```bash
 # Real MacBook1,1 hardware. i915 is the GMA 950 KMS driver.
@@ -276,12 +277,11 @@ and post-install, and logs to `/var/log/omarchy-install.log`. It takes about
 three seconds. The hardware scripts are all guarded and skip themselves on
 machines they do not match; the Apple ones will fire on the MacBook.
 
-ufw comes up enforcing deny-incoming. You can add rules from the chroot, and
-the old warning here that you cannot was wrong in a way that matters: `arch-chroot
-/mnt ufw allow 22/tcp` **prints `ERROR: problem running` and exits 1**, because
-it cannot load the rule into the kernel from a chroot, but it does write the
-rule to `/etc/ufw/user.rules` and the rule is live after the reboot. Check with
-`grep 22 /mnt/etc/ufw/user.rules` rather than trusting the exit code.
+ufw comes up enforcing deny-incoming, and you **can** add rules here.
+`arch-chroot /mnt ufw allow 22/tcp` prints `ERROR: problem running` and exits
+1, because it cannot load the rule into the kernel from a chroot, but it does
+write the rule to `/etc/ufw/user.rules` and the rule is live after the reboot.
+Check `grep 22 /mnt/etc/ufw/user.rules`, not the exit code.
 
 ### 9. The user stage
 
@@ -398,11 +398,14 @@ renderer and none of them pointed here.
 `default/hypr/input.lua` now ships `numlock_by_default = false`. The cost is a
 keyboard that starts with numlock off, and the MacBook1,1 has no numpad.
 
-Two things this does not mean. It does not mean the renderer is fixed: there is
-still a background failure rate of roughly one start in five, visible in the
-3/4, 5/6 and 4/5 rows above, so **an occasional login that lands on the greeter
-is expected**. Log in again. And it does not mean the trigger is understood:
-one config path reaches it reliably and has been closed, that is all.
+With the line off, **five cold boots out of five put the desktop on screen**,
+greetd's own autologin, no retries, nothing by hand.
+
+Two things this does not mean. It does not mean the renderer is fixed: the
+hand-start harness still lost about one start in five, visible in the 3/4, 5/6
+and 4/5 rows above, so **a login that lands on the greeter is possible**. Log in
+again. And it does not mean the trigger is understood: one config path reaches
+it every time and has been closed, that is all.
 
 If you turn `numlock_by_default` back on, this comes back. Do not.
 
@@ -444,8 +447,8 @@ crash back is worth more than any other single thing you could send.
 ## At the machine
 
 Everything below is hardware, and none of it can be answered in a VM. Work down
-the list and write down the answer even when it is "yes, fine". Section 12 says
-how to capture each one.
+the list and write down the answer even when it is "yes, fine". "If it fails:
+what to capture" is the next section, and it applies to every item here.
 
 ### 1. Does the GMA 950 scan out at all (the big one)
 
@@ -488,7 +491,7 @@ on the firmware's own fan curve, which on this model is lazy.
 Watch the temperature under load before you trust it with a long build:
 
 ```bash
-sensors            # applesmc; wants the lm_sensors that is already in the core
+sensors            # applesmc; lm_sensors arrives as a mesa dependency
 ```
 
 If it climbs past 85 C on an ordinary workload, say so. A fan daemon then goes
@@ -556,18 +559,19 @@ pactl info
 A failed attempt is still a useful report if you bring these back. Capture what
 you can; partial is fine.
 
-**Before anything else, make the session's own output reachable.** Hyprland's
-runtime log is empty by default (`debug:disable_logs`), and greetd does not
-send the session's stdout anywhere. The fork's greetd config now wraps the
-greeter's session in `systemd-cat`, so after a login through tuigreet:
+**Start with the session's own output.** Hyprland's runtime log file is empty
+by default (`debug:disable_logs`) and greetd sends the session's stdout
+nowhere, so the fork's greetd config runs both sessions, the autologin one and
+the one you get from tuigreet, through `systemd-cat`:
 
 ```bash
 journalctl -b -t omarchy-session --no-pager | tail -200
 ```
 
-That is where `malloc(): invalid size (unsorted)` and the crash-report path
-appear. For the autologin session, which is not wrapped, use the crash report
-instead.
+That is where the compositor's banner, `malloc(): invalid size (unsorted)` and
+the path of the crash report all appear. If this comes back empty, your
+`/etc/greetd/config.toml` predates the change; add
+`systemd-cat -t omarchy-session ` in front of both `command =` lines.
 
 The rest, in order of usefulness:
 

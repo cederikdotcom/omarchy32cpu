@@ -388,7 +388,7 @@ to install this at a machine with no way to ask questions. And the
 compositor, the shell and their fifteen unpackaged dependencies are now
 published as one prebuilt i686 tarball
 (`omarchy32cpu-stack-i686-<date>.tar.zst`, 56 MB) rather than a build
-recipe. The recipe was sixteen components, pip cmake and meson, and a
+recipe. The recipe was seventeen components, pip cmake and meson, and a
 wayland-protocols patch; on a 2006 Core Duo that is a day of compiling
 before the first login attempt. The recipe stays in the runbook for
 anyone who wants it.
@@ -401,7 +401,8 @@ greetd with no hand-holding: `docs/pixman-renderer/i686-greetd-desktop.png`
 - the bar, the tray, the clock, the theme wallpaper, foot on
 `Super+Return` and the Omarchy menu on `Super+Space`, at 1280x800 in
 2048 MB, with `Renderer: pixman (software)` on `Backend: drm`, zero
-failed units and 491 MB in use.
+failed units and 491 MB in use. Five cold boots out of five landed on
+the desktop.
 
 Before this, the same install crashed on every login. The bisect ran one
 config variant at a time, hand-starting the same binary against the same
@@ -430,7 +431,8 @@ reached it every time. The 3/4, 5/6 and 4/5 rows are the residue: about
 one start in five still dies, so an occasional login that lands on the
 greeter is expected and a second login gets you in. Fixing the renderer
 properly is still the next job, and the sites named below are still the
-places to look.
+places to look. The five clean cold boots say the greetd path is usable,
+not that the bug is gone.
 
 ### What is still broken on i686
 
