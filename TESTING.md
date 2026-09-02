@@ -32,11 +32,14 @@ are the real upstream Omarchy shell (`shell/`, 175 files of QML,
 byte-identical to upstream), drawn by Qt Quick's **software** scenegraph
 on top of the pixman compositor. No GPU is involved at any layer.
 
-**On x86_64 you have to build two things from source**, because neither
-is in any repo: this fork's Hyprland/aquamarine, and Quickshell 0.3.1.
+**On x86_64 you have to build one thing from source**: this fork's
+Hyprland/aquamarine, because the pixman renderer exists in no repo.
+Quickshell no longer needs building there - official Arch now carries
+`extra/quickshell 0.3.1-1`, exactly the version this fork wants, so
+`pacman -S quickshell` does step 10.
 [`docs/runbooks/install-x86_64.md`](docs/runbooks/install-x86_64.md)
-steps 9 and 10 give the exact commands, and it is about five minutes of
-compiling on a modern machine.
+steps 9 and 10 give the commands either way, and the compositor is about
+five minutes of compiling on a modern machine.
 
 **On i686 you install them, prebuilt.** The recipe there is seventeen
 components, `cmake` and `meson` from pip and a patch to

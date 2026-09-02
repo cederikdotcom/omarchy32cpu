@@ -110,7 +110,17 @@ You need an Arch install medium and the standard Arch install knowledge. This is
 
    The Hyprland build installs its own `hyprland.desktop` and `hyprland-uwsm.desktop` into `/usr/local/share/wayland-sessions/`. Neither sets `HYPRLAND_RENDERER=pixman`, so picking either one in the greeter gives you a black screen on a machine with no GPU. The installer puts the working entry at `/usr/share/wayland-sessions/omarchy.desktop`; delete upstream's two if you do not want them offered.
 
-10. **Install the shell.** The Omarchy desktop is Quickshell: the bar, the menu, notifications, the OSD, the wallpaper, the lock screen, the tray and the whole plugin system are QML under `shell/`. Quickshell is in neither official Arch nor archlinux32 (upstream installs it from `pkgs.omarchy.org`), so this is the second thing the fork cannot yet package, and it is built from source exactly like the compositor.
+10. **Install the shell.** The Omarchy desktop is Quickshell: the bar, the menu, notifications, the OSD, the wallpaper, the lock screen, the tray and the whole plugin system are QML under `shell/`.
+
+    **On x86_64 there is now a package.** Official Arch carries `extra/quickshell 0.3.1-1`, the exact version this fork targets (checked 2026-09-02), so the whole of this step reduces to:
+
+    ```bash
+    arch-chroot /mnt pacman -S --needed quickshell
+    ```
+
+    It is not in `install/omarchy-base.packages` because that list is shared with i686 and archlinux32 has no Quickshell at all; the i686 path installs it prebuilt from the stack tarball instead. Everything below is the from-source recipe, kept for anyone who wants a `-DDISTRIBUTOR` build, a newer tag than Arch ships, or a rebuild after a Qt bump. If you took the package, skip to step 11 - but read the private-Qt-API warning at the end of this step first, because it applies to the repo build too.
+
+    Built from source, Quickshell goes in exactly like the compositor.
 
     Its runtime dependencies are already in `install/omarchy-base.packages`. Its build-only dependencies are not, because they belong on the build host rather than on the target:
 
@@ -143,6 +153,8 @@ You need an Arch install medium and the standard Arch install knowledge. This is
     ```bash
     arch-chroot /mnt quickshell --version    # Quickshell 0.3.1 ... distributed by omarchy32cpu
     ```
+
+    The repo package answers the same version with Arch's own distributor string; only the build you made yourself says `omarchy32cpu`.
 
 11. Reboot. greetd starts `/usr/share/omarchy/bin/omarchy-hyprland-launch`, which sets `HYPRLAND_RENDERER=pixman`, `AQ_FORCE_ALLOCATOR=dumb` and `QT_QUICK_BACKEND=software`, and autologs `<user>` into Hyprland.
 
