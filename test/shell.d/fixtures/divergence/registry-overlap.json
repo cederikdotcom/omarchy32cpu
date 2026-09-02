@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "alpha",
+      "issue": null,
+      "title": "Alpha divergence",
+      "status": "substitute",
+      "pathspecs": ["alpha/", "assets/", "beta/", "gamma/"],
+      "handling": "Alpha is handled by a stand-in.",
+      "rationale": "Alpha does not exist on the target."
+    },
+    {
+      "id": "alpha-too",
+      "issue": null,
+      "title": "Alpha divergence, claimed twice",
+      "status": "deferred",
+      "pathspecs": ["alpha/one.sh"],
+      "handling": "Also claims one alpha file.",
+      "rationale": "Deliberate overlap for the test."
+    }
+  ]
+}

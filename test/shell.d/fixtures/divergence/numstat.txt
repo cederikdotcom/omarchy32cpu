@@ -1,0 +1,5 @@
+10	5	alpha/one.sh
+3	0	alpha/two.sh
+-	-	assets/logo.png
+0	40	beta/gone.sh
+7	7	gamma/only.sh

@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "alpha",
+      "issue": 101,
+      "title": "Alpha divergence",
+      "status": "substitute",
+      "pathspecs": ["alpha/", "assets/*.png"],
+      "handling": "Alpha is handled by a stand-in.",
+      "rationale": "Alpha does not exist on the target."
+    },
+    {
+      "id": "beta",
+      "issue": 102,
+      "title": "Beta divergence",
+      "status": "deferred",
+      "pathspecs": ["beta/gone.sh", "beta/never-matches.sh"],
+      "handling": "Beta is deleted.",
+      "rationale": "Beta is not wanted here."
+    },
+    {
+      "id": "gamma",
+      "issue": null,
+      "title": "Gamma divergence",
+      "status": "upstreamable",
+      "pathspecs": ["gamma/only.sh"],
+      "handling": "Gamma is a fix.",
+      "rationale": "Gamma should go upstream."
+    },
+    {
+      "id": "delta",
+      "issue": 104,
+      "title": "Delta divergence",
+      "status": "porting",
+      "pathspecs": [],
+      "expect_paths": false,
+      "handling": "Delta lives outside the tree.",
+      "rationale": "Delta is carried in an out-of-repo build."
+    }
+  ]
+}

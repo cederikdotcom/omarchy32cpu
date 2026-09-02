@@ -1,0 +1,355 @@
+{
+  "version": 1,
+  "description": "Semantic divergence registry for Omarchy CPU. Every path where this fork's work branch differs from the upstream default branch belongs to exactly one entry below. The entries are the unit of tracking: one GitHub issue each, not one issue per file. .github/divergence/report.py measures each entry's weight against a live diff and refreshes the issues; .github/workflows/upstream-sync.yml runs it on every sync.",
+  "upstream": {
+    "repo": "omacom/omarchy",
+    "note": "The default branch is resolved at run time, not pinned here, so a rename upstream does not silently make the report compare against nothing."
+  },
+  "conventions": {
+    "one_owner": "A path matched by two entries fails the run. Where one file carries more than one reason to diverge, it is owned by the entry that explains the larger share of its changed lines, and the other entries name it in shared_with.",
+    "expect_paths": "false means the entry knowingly owns no files: its work lives outside this tree. Any other entry that matches nothing is reported as stale.",
+    "statuses": "permanent, substitute, deferred, porting, upstreamable, resolved."
+  },
+  "groups": [
+    {
+      "id": "render-cpu",
+      "issue": 1,
+      "title": "CPU (pixman) rendering, and a tree with no GPU in it",
+      "status": "porting",
+      "pathspecs": [
+        "docs/pixman-renderer/",
+        "install/hardware/vulkan.sh",
+        "default/hypr/looknfeel.lua",
+        "config/hypr/looknfeel.lua",
+        "default/hypr/input.lua",
+        "config/hypr/input.lua",
+        "test/shell.d/nvidia-kms-hook-test.sh",
+        "test/shell.d/nvidia-kms-migration-test.sh"
+      ],
+      "handling": "Hyprland runs on this fork's pixman renderer (cederikdotcom/Hyprland branch pixman-renderer with cederikdotcom/aquamarine branch cpu-backend), selected at session start by HYPRLAND_RENDERER=pixman and AQ_FORCE_ALLOCATOR=dumb. In-tree that means flat mode (animations off, and the effects upstream already ships off stay off), two settings turned off because they crash the compositor on the 32-bit target (numlock_by_default and the gsettings cursor-theme write), and no Vulkan or NVIDIA install path.",
+      "rationale": "The target machine has a GMA 950 and no GLES 3.0, so upstream's renderer cannot start at all. The compositor work itself is out-of-tree and is the subject of issue #1; what lands here is the configuration and installer surface that assumes it. docs/pixman-renderer/ is the bench evidence (plan, progress, benchmark, screenshots) that keeps the port reviewable.",
+      "shared_with": [
+        "session-launch"
+      ],
+      "notes": "Deleting the two NVIDIA KMS test files dropped coverage of migrations/1786605598.sh, which is still shipped. Restoring those tests, or removing the migration, is open work under this entry."
+    },
+    {
+      "id": "shell-qt-software",
+      "issue": 2,
+      "title": "Quickshell desktop under Qt software rendering",
+      "status": "porting",
+      "pathspecs": [],
+      "expect_paths": false,
+      "handling": "shell/ is taken from upstream verbatim. The whole adaptation is one environment variable set by the session launcher (QT_QUICK_BACKEND=software) plus an out-of-tree Quickshell build, so the shell contributes no file-level divergence at all.",
+      "rationale": "Kept as its own entry precisely because its weight is zero: the fork carries a real, open Quickshell dependency (no i686 package, private-Qt-API rebuilds on every qt6 bump) that a file-count table would otherwise say nothing about. If shell/ ever forks, this entry starts owning paths and its weight becomes visible immediately.",
+      "shared_with": [
+        "session-launch"
+      ]
+    },
+    {
+      "id": "session-launch",
+      "issue": 3,
+      "title": "Session start without uwsm",
+      "status": "substitute",
+      "pathspecs": [
+        "bin/omarchy-hyprland-launch",
+        "bin/uwsm-app",
+        "default/wayland-sessions/omarchy.desktop",
+        "test/shell.d/hyprland-keyboard-layout-test.sh"
+      ],
+      "handling": "bin/omarchy-hyprland-launch starts Hyprland directly and exports everything uwsm would have exported, sourcing upstream's own default/uwsm/env.d files so the two paths keep one session environment. bin/uwsm-app is a setsid shim so the ~28 in-tree callers keep their name and their detach semantics. It also seeds XKB_DEFAULT_* from /etc/vconsole.conf before exec, which upstream does later through hyprctl.",
+      "rationale": "uwsm has no archlinux32 i686 package. A real port is a Python package plus its units - plausible, not yet done - so the shim is the honest interim. Drop both files the day uwsm joins the package set.",
+      "shared_with": [
+        "render-cpu",
+        "shell-qt-software",
+        "packages-core"
+      ]
+    },
+    {
+      "id": "login-greeter",
+      "issue": 4,
+      "title": "greetd + tuigreet replaces SDDM",
+      "status": "substitute",
+      "pathspecs": [
+        "default/sddm/",
+        "etc/sddm.conf.d/",
+        "install/login/",
+        "install/config/increase-lockout-limit.sh"
+      ],
+      "handling": "The SDDM theme, its Qt QML greeter and its two config drop-ins are deleted; install/login/greetd.sh configures greetd with tuigreet against bin/omarchy-hyprland-launch for both the greeter session and autologin. The faillock hardening keeps its /etc/pam.d/system-auth half and drops the sddm-autologin half, because greetd reaches system-auth through its own packaged PAM file.",
+      "rationale": "SDDM's greeter needs a GL context and this target has no GPU, so the login screen never renders. greetd + tuigreet is a text greeter with the same job. Both are in extra on both arches.",
+      "shared_with": [
+        "packages-core"
+      ]
+    },
+    {
+      "id": "boot-loader",
+      "issue": 5,
+      "title": "GRUB i386-efi replaces the Limine UKI boot path",
+      "status": "permanent",
+      "pathspecs": [
+        "default/limine/",
+        "etc/limine-entry-tool.d/",
+        "etc/mkinitcpio.conf.d/omarchy_hooks.conf",
+        "bin/omarchy-refresh-limine",
+        "bin/omarchy-refresh-grub",
+        "bin/omarchy-reinstall-configs",
+        "default/omarchy/launcher.hides",
+        "test/shell.d/limine-cmdline-migration-test.sh"
+      ],
+      "handling": "bin/omarchy-refresh-grub installs GRUB into the removable fallback path (/boot/EFI/BOOT/BOOT*.EFI) with no NVRAM write, picking i386-efi or x86_64-efi from the GRUB platform modules actually installed rather than from uname -m, which lies inside a target chroot. The Limine configs, entry-tool drop-ins, UKI mkinitcpio preset and the Limine refresh command are gone, and bin/omarchy-reinstall-configs calls refresh-grub in their place.",
+      "rationale": "Upstream boots a 64-bit UKI through Limine. The A1181's Apple EFI is 32-bit and can only load BOOTIA32.EFI, and there is no 32-bit Limine boot path. This one does not converge: it is a firmware constraint, not a packaging gap.",
+      "shared_with": [
+        "boot-splash",
+        "storage-snapshots"
+      ]
+    },
+    {
+      "id": "boot-splash",
+      "issue": 6,
+      "title": "Plymouth boot splash removed",
+      "status": "deferred",
+      "pathspecs": [
+        "bin/omarchy-plymouth-*",
+        "bin/omarchy-refresh-plymouth",
+        "default/plymouth/",
+        "etc/plymouth/",
+        "test/shell.d/plymouth-set-test.sh"
+      ],
+      "handling": "The whole Plymouth surface is deleted: the eight bin/omarchy-plymouth-* commands, the theme assets and script, the plymouthd config, and the 968-line test file. The Style > Unlock menu entry that drove them is removed with it.",
+      "rationale": "Plymouth adds initramfs weight and hides exactly the boot messages a tester on unproven 2006 hardware needs to read. It is available on both arches, so this is a deliberate deferral, not an incompatibility - and it is one of the two heaviest deletions in the fork, which is why it is tracked on its own rather than folded into the package set.",
+      "shared_with": [
+        "boot-loader",
+        "hypr-tooling"
+      ]
+    },
+    {
+      "id": "hypr-tooling",
+      "issue": 7,
+      "title": "hypr* companion tools substituted",
+      "status": "substitute",
+      "pathspecs": [
+        "bin/omarchy-capture-color",
+        "bin/omarchy-refresh-hyprsunset",
+        "bin/omarchy-restart-hyprsunset",
+        "bin/omarchy-toggle-nightlight",
+        "default/themed/hyprland-preview-share-picker.css.tpl",
+        "default/omarchy/omarchy-menu.jsonc",
+        "test/shell.d/nightlight-test.sh"
+      ],
+      "handling": "hyprsunset becomes wlsunset behind the same omarchy-toggle-nightlight / omarchy-restart-hyprsunset command names; hyprpicker becomes bin/omarchy-capture-color on grim + slurp; xdg-desktop-portal-hyprland becomes xdg-desktop-portal-wlr, so the hyprland-share-picker theme template has nothing to theme. The menu file is rewired to match, and also carries the Style > Unlock removal and the Remote View entry.",
+      "rationale": "None of the hypr* companions are packaged for archlinux32, and installing the ones that exist on x86_64 would drag in archlinux32's hyprutils, which this fork replaces with its own build for Hyprland 0.56. Each substitute implements the same user-visible behaviour, so the menu and command names are unchanged.",
+      "shared_with": [
+        "boot-splash",
+        "remote-access"
+      ]
+    },
+    {
+      "id": "packages-core",
+      "issue": 8,
+      "title": "82-package core: no preinstalled applications or optional daemons",
+      "status": "deferred",
+      "pathspecs": [
+        "install/omarchy-base.packages",
+        "install/omarchy-other.packages",
+        "install/config/all.sh",
+        "install/config/docker.sh",
+        "install/config/enable-services.sh",
+        "install/config/firewall.sh",
+        "install/hardware/bluetooth.sh",
+        "install/user/all.sh",
+        "install/user/chromium.sh",
+        "install/user/fonts.sh",
+        "install/user/mise.sh",
+        "install/user/mise-work.sh",
+        "install/user/first-run/install-voxtype.hook",
+        "bin/omarchy-launch-terminal",
+        "bin/omarchy-provision-user",
+        "config/hypr/hyprland.lua",
+        "default/hypr/autostart.lua",
+        "test/shell.d/preinstalls-test.sh",
+        "test/shell.d/voxtype-invitation-test.sh",
+        "test/shell.d/launch-1password-test.sh",
+        "test/shell.d/cups-hardening-test.sh",
+        "test/shell.d/chromium-copy-url-test.sh",
+        "test/shell.d/default-agent-test.sh",
+        "test/shell.d/hermes-cli-test.sh",
+        "test/shell.d/provisioning-groups-test.sh",
+        "test/shell.d/firewall-config-test.sh"
+      ],
+      "handling": "install/omarchy-base.packages is an 82-name list against upstream's ~150, and every name has to resolve on both official Arch x86_64 and archlinux32 i686 because the list is shared and pacstrap aborts on a name it cannot find. The consequences are scripted rather than assumed: no Docker step or firewall rules for it, no Chromium or mise user step, no udiskie autostart, preinstalled-app keybindings off by default, a foot fallback where xdg-terminal-exec is missing, default handlers claimed only for .desktop files that exist, a bluez guard, and no cups/avahi/docker/power-profiles services enabled. Upstream's assertions about those components are rewritten to assert their absence instead of being deleted.",
+      "rationale": "The fork's stated scope: a 2 GB, 1.83 GHz, 2006 machine gets a core desktop and the user installs applications themselves. Most of these packages exist on both arches and are deferred on purpose; a few (chromium at archlinux32's 2021 build, the AUR and pkgs.omarchy.org apps) have concrete reasons recorded in docs/RELEASE-NOTES.md under \"Package divergence from upstream\". This is the entry to consult before re-litigating \"why is X not here\".",
+      "shared_with": [
+        "login-greeter",
+        "no-package-repo",
+        "session-launch",
+        "test-bench"
+      ]
+    },
+    {
+      "id": "arch32-repos",
+      "issue": 9,
+      "title": "archlinux32 repositories, mirrors and toolchain skew",
+      "status": "permanent",
+      "pathspecs": [
+        "default/pacman/",
+        "install/post-install/pacman.sh",
+        "bin/omarchy-powerprofiles-list"
+      ],
+      "handling": "The three channel pacman.conf files and their mirrorlists carry archlinux32's repositories and mirror.archlinux32.org. install/post-install/pacman.sh applies them only when uname -m reports i686, so running the same tree on x86_64 no longer destroys pacman. bin/omarchy-powerprofiles-list uses POSIX bracket expressions instead of GNU awk's \\s.",
+      "rationale": "i686 packages come from archlinux32, which is a separate distribution with its own mirrors, keyring and (older) toolchain. The arch-conditional application is the load-bearing part: the tree is shared between both targets and either config is fatal on the other.",
+      "shared_with": []
+    },
+    {
+      "id": "theming-foot",
+      "issue": 10,
+      "title": "foot version skew in the themed terminal config",
+      "status": "upstreamable",
+      "pathspecs": [
+        "bin/omarchy-theme-set",
+        "bin/omarchy-theme-set-foot-section",
+        "default/themed/foot.ini.tpl"
+      ],
+      "handling": "The template emits [colors] and omits any cursor colour; bin/omarchy-theme-set-foot-section then asks the installed foot binary (foot --check-config) which section name it accepts and rewrites the rendered file to match, as a post-theme step. bin/omarchy-theme-set also refuses to install a staging directory whose colors.toml is empty.",
+      "rationale": "foot renamed [colors] to [colors-dark] and moved the cursor option between versions; archlinux32 ships 1.13 and official Arch ships 1.27, and an unknown option is a hard config error in both. One static template cannot satisfy both arches, so the fork probes instead of pinning. Probing the binary is version-agnostic and would serve upstream too - this entry should end as a pull request, not as a permanent fork difference.",
+      "shared_with": []
+    },
+    {
+      "id": "no-package-repo",
+      "issue": 11,
+      "title": "The fork ships no pacman package, so /etc has to be seeded by the installer",
+      "status": "porting",
+      "pathspecs": [
+        "install/config/omarchy-path.sh",
+        "install/config/memory-tuning.sh",
+        "default/bash/env-bootstrap",
+        "test/shell.d/config-test.sh",
+        "test/shell.d/unowned-system-paths-test.sh"
+      ],
+      "handling": "Everything upstream's omarchy pacman package drops into /etc is installed by the config stage instead: /etc/profile.d/omarchy.sh, the zram generator drop-in, the oomd config and app.slice kill candidacy, the sysctl reclaim and file-watcher tuning, and the zswap tmpfiles rule. default/bash/env-bootstrap prepends $OMARCHY_PATH/bin when no /usr/bin/omarchy exists, because nothing symlinks the commands. The two tests that require an omarchy-pkgs checkout skip instead of failing, and say how to re-arm them (OMARCHY_PKGS_PATH).",
+      "rationale": "There is no fork package repository yet, so a fresh install came up with no zram, no swap, stock oomd thresholds and no omarchy-* on PATH while every document in the tree said otherwise - the wrong way round on the 2 GB machine this fork exists for. All of it collapses back to upstream's shape once the fork ships PKGBUILDs, which makes this the entry with the clearest exit condition.",
+      "shared_with": [
+        "packages-core"
+      ]
+    },
+    {
+      "id": "hardware-a1181",
+      "issue": 12,
+      "title": "MacBook A1181 / i945 hardware enablement",
+      "status": "permanent",
+      "pathspecs": [
+        "install/hardware/all.sh",
+        "install/hardware/apple/fix-a1181.sh",
+        "install/hardware/intel/sof-firmware.sh"
+      ],
+      "handling": "A new install/hardware/apple/fix-a1181.sh joins the hardware chain for the A1181's own quirks, and the Intel SOF firmware step skips the i945's ICH7 audio (PCI 8086:27a2), which is plain snd_hda_intel and needs no SOF.",
+      "rationale": "Upstream's hardware chain has no entry for 2006 Apple hardware. These are additive detections gated on the hardware they match, so they cost nothing on any other machine - the cheapest kind of divergence to carry, and the kind most likely to be acceptable upstream.",
+      "shared_with": []
+    },
+    {
+      "id": "storage-snapshots",
+      "issue": 13,
+      "title": "ext4 by default: snapshots are opt-in",
+      "status": "deferred",
+      "pathspecs": [
+        "install/config/snapper.sh",
+        "test/shell.d/snapper-test.sh"
+      ],
+      "handling": "install/config/snapper.sh exits early unless the root filesystem is btrfs and snapper is installed, and no longer enables limine-snapper-sync.service. The test asserts the guard exists and drops the Limine half of the snapshot-retention assertions.",
+      "rationale": "Omarchy CPU installs on ext4 by default - btrfs metadata overhead is real on a 2006 disk - so upstream's unconditional snapper configuration would fail the install stage on most fork machines. Users who choose btrfs themselves get the upstream behaviour unchanged.",
+      "shared_with": [
+        "boot-loader"
+      ]
+    },
+    {
+      "id": "remote-access",
+      "issue": 14,
+      "title": "wayvnc remote view",
+      "status": "permanent",
+      "pathspecs": [
+        "bin/omarchy-remote-view"
+      ],
+      "handling": "bin/omarchy-remote-view toggles a wayvnc server over wlr-screencopy, bound to localhost only and reached through an SSH tunnel; the Trigger > Toggle menu carries it. The default ufw posture blocks direct LAN exposure regardless.",
+      "rationale": "Additive, and the natural remote path for a CPU-only desktop - both for headless bench VMs and for cloud-hosted installs, where it is the only way to see the session at all. wlr-screencopy works under the pixman renderer, which upstream's GPU-oriented capture path does not.",
+      "shared_with": [
+        "hypr-tooling"
+      ]
+    },
+    {
+      "id": "quattro-upgrade-tool",
+      "issue": 15,
+      "title": "The Omarchy 3 to 4 upgrade path is not shipped",
+      "status": "permanent",
+      "pathspecs": [
+        "bin/omarchy-upgrade-to-quattro",
+        "test/shell.d/upgrade-to-quattro-test.sh",
+        "test/shell.d/systemd-test.sh",
+        "test/shell.d/snapshot-create-test.sh",
+        "test/shell.d/hyprland-default-config-test.sh",
+        "test/shell.d/sudoless-docker-posture-test.sh"
+      ],
+      "handling": "bin/omarchy-upgrade-to-quattro and its dedicated test are deleted; the four other test files that reached into it keep every assertion that stands on its own and replace the upgrade-script assertions with a comment saying why there is nothing to read.",
+      "rationale": "That command upgrades an existing Omarchy 3 x86_64 install in place. No such install exists for this fork - every Omarchy CPU machine is a fresh install from the runbooks - so the script is 2404 lines of unreachable code, and the largest single deletion in the fork. This is the reason the deletion column is so much larger than the insertion column.",
+      "shared_with": [
+        "packages-core",
+        "test-bench"
+      ]
+    },
+    {
+      "id": "test-bench",
+      "issue": 16,
+      "title": "Test suite adapted to the root-only disposable bench",
+      "status": "upstreamable",
+      "pathspecs": [
+        "test/shell.d/dev-link-test.sh",
+        "test/shell.d/dev-unlink-test.sh",
+        "test/shell.d/hw-hybrid-gpu-test.sh",
+        "test/shell.d/security-fido2-migration-test.sh",
+        "test/shell.d/snapper-timeline-leak-test.sh",
+        "test/shell.d/sudo-docker-test.sh"
+      ],
+      "handling": "Fixtures that depend on being unable to read or traverse something are guarded with (( EUID != 0 )) and the surrounding assertions still run; the two dev-link tests skip wholesale, because the commands they cover refuse to run as root by design; hw-hybrid-gpu-test puts $ROOT/bin on PATH so the helper the command calls is found.",
+      "rationale": "The fork's suite runs as root inside a disposable VM (agents/skills/acceptance-tests.md), where root traverses a mode-000 directory and writes through any file mode, so a mode-based fixture silently stops staging the state it claims to. These guards make the tests honest on any host, not just this fork's, and belong upstream.",
+      "shared_with": [
+        "packages-core",
+        "quattro-upgrade-tool"
+      ]
+    },
+    {
+      "id": "fork-docs",
+      "issue": 17,
+      "title": "Fork documentation",
+      "status": "permanent",
+      "pathspecs": [
+        "AGENTS.md",
+        "README.md",
+        "TESTING.md",
+        "docs/RELEASE-NOTES.md",
+        "docs/a1181-gap-analysis.md",
+        "docs/divergence.md",
+        "docs/file-layout.md",
+        "docs/runbooks/"
+      ],
+      "handling": "Almost all additive: the release notes (with the audited package divergence table), the A1181 gap analysis, the three install and bench runbooks, the divergence-registry reference, and a README and TESTING.md describing the fork rather than upstream. Two upstream-owned files are edited rather than added: docs/file-layout.md gains the fork-only directories, and AGENTS.md gains the paragraph pointing contributors at this registry.",
+      "rationale": "A fork that substitutes a bootloader, a greeter, a renderer and a package set has to write down why, or every one of those decisions gets re-argued from memory. The additive files are free at merge time - they remove nothing upstream ships - so most of this entry's weight is weight without risk. The two edited files are the exception and are the only part of this entry that can conflict.",
+      "shared_with": []
+    },
+    {
+      "id": "fork-infra",
+      "issue": 18,
+      "title": "Fork repository and CI infrastructure",
+      "status": "permanent",
+      "pathspecs": [
+        ".github/ISSUE_TEMPLATE/",
+        ".github/workflows/upstream-sync.yml",
+        ".github/divergence/",
+        ".gitignore",
+        "test/shell.d/divergence-registry-test.sh",
+        "test/shell.d/fixtures/divergence/"
+      ],
+      "handling": "The issue templates ask for the fork's own hardware and arch; upstream-sync.yml mirrors upstream to a tracking branch, test-merges without committing, and runs this registry on every scheduled or manual invocation; .github/divergence/ is the registry and its report script, covered by test/shell.d/divergence-registry-test.sh against a fixture.",
+      "rationale": "Fork-only plumbing with no runtime role - nothing under .github/ reaches an installed system. It exists so that the rest of this table stays true without anyone remembering to update it.",
+      "shared_with": []
+    }
+  ]
+}

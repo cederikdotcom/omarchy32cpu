@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "alpha",
+      "issue": null,
+      "title": "Alpha divergence",
+      "status": "substitute",
+      "pathspecs": ["alpha/"],
+      "handling": "Alpha is handled by a stand-in.",
+      "rationale": "Alpha does not exist on the target."
+    }
+  ]
+}
