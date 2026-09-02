@@ -35,7 +35,7 @@ You need an Arch install medium and the standard Arch install knowledge. This is
    pacstrap -K /mnt $(grep -v '^#' /path/to/omarchy32cpu/install/omarchy-base.packages | grep -v '^$')
    ```
 
-   That is the same 80-package list the MacBook uses. It pulls in roughly 250 packages with dependencies. If you have not cloned the repo yet, `pacstrap -K /mnt base linux linux-firmware git` first, then clone it inside the target and rerun `pacstrap` with the list.
+   That is the same 82-package list the MacBook uses. It pulls in roughly 250 packages with dependencies. If you have not cloned the repo yet, `pacstrap -K /mnt base linux linux-firmware git` first, then clone it inside the target and rerun `pacstrap` with the list.
 
 4. The usual Arch system files, before anything else runs:
 
@@ -253,6 +253,18 @@ Re-verified again on 2026-09-01, after the shim desktop was replaced by the real
 - **The plugin system is live**: `omarchy-plugin-catalog` enumerates the 37 first-party plugins.
 
 One timing note for slow machines: `omarchy-theme-set` hardlinks the two wallpapers into `~/.cache/omarchy/background-transitions` and deletes them three seconds later, while the shell loads them asynchronously for the crossfade. Under TCG that window is occasionally too short and the shell logs `Cannot open .../next-<pid>.png`. Only the crossfade is lost: `Background.qml` applies the palette from a 300 ms fallback timer, so the retint itself still lands. It is upstream's own timing assumption and is left alone.
+
+Re-verified again on 2026-09-02, on the same VM, after the first integration of 262 upstream commits. The tree was installed over `/usr/share/omarchy`, the affected install steps re-run, and the machine rebooted, so everything below came up under greetd:
+
+- **The package list grew to 82 and both new names matter at runtime.** `qt6-imageformats` ships `imageformats/libqwebp.so`, and 79 of the 92 backgrounds this repo carries are `.webp`; `libvips` is what `bin/omarchy-menu-images` shells out to for the picker's thumbnails. Neither is pulled in by anything else. Without the first, the wallpaper and the picker come up empty.
+- **A WebP wallpaper decodes and displays.** Confirmed from the QEMU display itself, not from `grim`: the rose-pine `1-funky-shapes.webp` (5000x3000) and the tokyo-night `0-winding-road.webp` (6016x3384) both render in full, the second of them as the first thing a freshly booted session draws. `libqwebp.so` is mapped executable into the running `quickshell`, and `pacman -Qo` puts it in `qt6-imageformats`.
+- **The image picker renders real thumbnails** of `.webp` files, both from the libvips JPEG cache and - with `vipsthumbnail` removed and the cache empty, which is `list.sh`'s documented fallback to the source file - straight from the `.webp` through Qt's own plugin. This needed a fix first; see the next bullet.
+- **Qt's software scenegraph has no shader stage, and `MultiEffect` draws nothing there** - silently, with no warning and no QML error. Every tile in the image picker masked its thumbnail through one, so the carousel came up as a row of empty borders. `ImagePicker.qml` now skips that layer when `QT_QUICK_BACKEND=software`. If you write shell QML for this fork, assume no `MultiEffect` and no `ShaderEffect`: the three other uses upstream ships (tray icon colorization, lock-screen blur, background reveal) are degraded the same way and are not adapted yet.
+- **The captive-portal network panel works.** `Super+Ctrl+W` renders the panel with live throughput, ping, IP and DNS controls; forcing NetworkManager to report `portal` (a `[connectivity]` drop-in whose `response=` cannot match) flips it to `SIGN-IN REQUIRED` with the `Open Captive Portal` button. No QML error mentions it and the shell process never restarts.
+- **Memory at idle**: `quickshell` 266 MB RSS (239 MB PSS) holding a 6016x3384 wallpaper, `Hyprland` 97 MB, `Xwayland` 40 MB, **771 MB of system memory in use** for the whole desktop, no failed units.
+- **Seven boots, seven first-attempt logins.** The known ~1-in-5 compositor login crash did not recur once on x86_64 in this run.
+
+One thing found and deliberately not fixed: **`omarchy-theme-set-browser-policy` cannot elevate on this fork.** It pins `PACKAGED_PATH=/usr/bin/omarchy-theme-set-browser-policy`, and `etc/sudoers.d/omarchy-theme-browser` grants NOPASSWD on that same path, both assuming upstream's `omarchy` package. This fork ships no package and keeps its commands in `/usr/share/omarchy/bin`, so every theme switch prints `Error accessing /usr/bin/omarchy-theme-set-browser-policy: No such file or directory` and the Chromium-family accent colour is never written. The theme switch itself completes and retints correctly. Fixing it means choosing a fork layout rule, so it belongs to the `no-package-repo` divergence entry rather than to a quick patch.
 
 Not verified, and the reason this runbook exists:
 

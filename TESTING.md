@@ -162,7 +162,7 @@ Permanently absent on this stack:
 Known broken or missing right now:
 
 - **Screen recording is broken.** `omarchy-capture-screenrecording` still targets gpu-screen-recorder, which is not shipped. Screenshots (`grim`/`slurp`) do work.
-- **No browser is preinstalled**, and no application of any kind is. This fork ships an 80-package core and you install your own. On i686 the repo browsers are ancient (chromium 90, firefox 114).
+- **No browser is preinstalled**, and no application of any kind is. This fork ships an 82-package core and you install your own. On i686 the repo browsers are ancient (chromium 90, firefox 114).
 - **Optional capture and transcode tools are absent**: `omarchy-capture-qr` needs zbar, `omarchy-capture-text` needs tesseract, `omarchy-transcode*` needs ffmpeg and imagemagick. Those commands error until you install the tool.
 - **`omarchy-debug` does not work**: it calls `inxi`, which is not in the core package set. Use the commands under "Diagnostics" below instead.
 - **`omarchy-update` is untested and should be treated as broken.** The fork does not track upstream channels and has no package repo.

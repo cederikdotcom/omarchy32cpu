@@ -43,7 +43,7 @@ The full Omarchy workflow with every pixel drawn by the CPU:
   the session)
 - GRUB i386-efi as BOOTIA32.EFI replaces limine + 64-bit UKI
 - archlinux32 i686 repos replace Arch x86_64 + pkgs.omarchy.org
-- No preinstalled applications: an 80-package core, the user installs
+- No preinstalled applications: an 82-package core, the user installs
   their own apps
 - Kept unchanged: the 24-color theme engine, the bash environment, the
   omarchy CLI router, keybinding philosophy, zram/oomd memory tuning
