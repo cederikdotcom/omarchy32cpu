@@ -38,10 +38,13 @@
       "issue": 2,
       "title": "Quickshell desktop under Qt software rendering",
       "status": "porting",
-      "pathspecs": [],
-      "expect_paths": false,
-      "handling": "shell/ is taken from upstream verbatim. The whole adaptation is one environment variable set by the session launcher (QT_QUICK_BACKEND=software) plus an out-of-tree Quickshell build, so the shell contributes no file-level divergence at all.",
-      "rationale": "Kept as its own entry precisely because its weight is zero: the fork carries a real, open Quickshell dependency (no i686 package, private-Qt-API rebuilds on every qt6 bump) that a file-count table would otherwise say nothing about. If shell/ ever forks, this entry starts owning paths and its weight becomes visible immediately.",
+      "pathspecs": [
+        "shell/plugins/image-picker/ImagePicker.qml",
+        "test/shell.d/image-picker-software-backend-test.sh"
+      ],
+      "expect_paths": true,
+      "handling": "shell/ is otherwise taken from upstream verbatim, and the bulk of the adaptation is still one environment variable set by the session launcher (QT_QUICK_BACKEND=software) plus an out-of-tree Quickshell build. The exception is Qt's software scenegraph having no shader stage: a MultiEffect draws nothing there, with no warning and no QML error. The image picker masks every carousel thumbnail through one, so on this fork the tiles rendered their borders and nothing else. ImagePicker.qml now skips that layer when the launcher's variable says software, and a shell test pins both halves.",
+      "rationale": "Kept as its own entry because the Quickshell dependency it names is real and open (no i686 package, private-Qt-API rebuilds on every qt6 bump) whatever its file count. It owned no paths until the software backend's missing shader stage forced a real QML divergence; the other three MultiEffect uses upstream ships (Tray icon colorization, LockView wallpaper blur, Background reveal) are degraded the same way and are not yet adapted.",
       "shared_with": [
         "session-launch"
       ]

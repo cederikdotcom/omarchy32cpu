@@ -18,6 +18,14 @@ Item {
   property string loadedImageRows: ""
   property string selectionFile: Quickshell.env("OMARCHY_IMAGE_SELECTOR_SELECTION_FILE") || Quickshell.env("OMARCHY_BACKGROUND_SELECTION_FILE")
   property string selectedImage: Quickshell.env("OMARCHY_IMAGE_SELECTOR_SELECTED")
+  // Qt Quick's software scenegraph has no shader stage, so every MultiEffect
+  // silently draws nothing at all - no warning, no QML error, just an empty
+  // item. omarchy-hyprland-launch sets QT_QUICK_BACKEND=software on this fork
+  // because the target machines have no GPU, which made every carousel
+  // thumbnail come up blank. Read the same variable the launcher sets: when it
+  // says software, skip the masking layer and draw the image straight. A
+  // tester who drops the variable to try the GL path gets the mask back.
+  readonly property bool shaderEffectsAvailable: Quickshell.env("QT_QUICK_BACKEND") !== "software"
   property int selectedIndex: 0
   property bool imagesLoaded: false
   property bool opened: false
@@ -490,7 +498,12 @@ Item {
 
               Item {
                 anchors.fill: parent
-                layer.enabled: true
+                // The layer itself renders fine on the software backend; only
+                // the MultiEffect below cannot. Dropping the layer with it
+                // spares the CPU renderer an offscreen surface per tile, and
+                // the tile keeps its skewed border either way - what is lost
+                // without a GPU is the skewed crop of the image inside it.
+                layer.enabled: root.shaderEffectsAvailable
                 layer.smooth: true
                 layer.effect: MultiEffect {
                   maskEnabled: true
