@@ -8,11 +8,29 @@
 # path, and it needs no efibootmgr or NVRAM write anywhere else either.
 # Install before mkconfig: on a first run grub-install also creates /boot/grub,
 # which grub-mkconfig needs to exist.
-if [[ $(uname -m) == i?86 ]]; then
-  grub_target=i386-efi
+#
+# Pick the target from the GRUB platform modules that are actually installed,
+# not from `uname -m`. The kernel's architecture is the wrong question inside a
+# target chroot: an i686 root chrooted from a 64-bit installer still reports
+# x86_64, and grub-install then dies with "modinfo.sh doesn't exist". Official
+# Arch ships both i386-efi and x86_64-efi, so prefer the 64-bit one there;
+# archlinux32 ships only i386-efi, which is exactly what the MacBook wants.
+# Override with OMARCHY_GRUB_TARGET for 32-bit EFI on a 64-bit CPU.
+grub_target=${OMARCHY_GRUB_TARGET:-}
+if [[ -z $grub_target ]]; then
+  if [[ -d /usr/lib/grub/x86_64-efi ]]; then
+    grub_target=x86_64-efi
+  elif [[ -d /usr/lib/grub/i386-efi ]]; then
+    grub_target=i386-efi
+  else
+    echo "No GRUB EFI platform found under /usr/lib/grub; is grub installed?" >&2
+    exit 1
+  fi
+fi
+
+if [[ $grub_target == "i386-efi" ]]; then
   efi_stub=BOOTIA32.EFI
 else
-  grub_target=x86_64-efi
   efi_stub=BOOTX64.EFI
 fi
 
