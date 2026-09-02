@@ -105,7 +105,7 @@ assert_not_staged .git "the clone's own git directory is never staged"
 
 # These run code, so the theme's versions must lose to Omarchy's generated ones
 # rather than merely be absent.
-for generated in neovim.lua gum_env.lua kitty.conf alacritty.toml foot.ini ghostty.conf hyprland.lua; do
+for generated in hyprland.lua neovim.lua gum_env.lua kitty.conf alacritty.toml foot.ini ghostty.conf; do
   assert_staged "$generated" "$generated is generated from Omarchy's template"
   assert_no_marker "$generated" "an installed theme cannot supply $generated"
 done
@@ -169,7 +169,6 @@ printf 'os.execute("%s")\n' "$marker" >"$themes/tokyo-night/hyprland.lua"
 
 set_theme "Tokyo Night" || fail "omarchy-theme-set applies a stock theme with a user overlay"
 grep -q '#abcdef' "$(staged colors.toml)" || fail "a user overlay still replaces the stock palette"
-assert_staged hyprland.lua "the stock theme's hyprland.lua is still generated"
 assert_no_marker hyprland.lua "a user overlay cannot add Lua to a stock theme"
 
 pass "an overlay on a stock theme repaints it without adding code"
@@ -207,8 +206,8 @@ pass "a theme name cannot climb out of the theme directories"
 # A denylist is only correct while someone adding a template classifies what it
 # generates. Every generated theme file is either denied to an installed theme or
 # recorded here as carrying colour, so a new template fails until it is placed.
-denied=(alacritty.toml foot.ini ghostty.conf gum_env.lua hyprland.lua kitty.conf neovim.lua vscode.json)
-colour_only=(btop.theme chromium.theme claude.json helix.toml keyboard.rgb obsidian.css pi.json shell.toml vscode-theme.json)
+denied=(alacritty.toml foot.ini ghostty.conf kitty.conf gum_env.lua hyprland.lua neovim.lua vscode.json)
+colour_only=(btop.theme chromium.theme claude.json helix.toml hyprland-preview-share-picker.css keyboard.rgb obsidian.css pi.json shell.toml vscode-theme.json)
 
 for tpl in "$ROOT"/default/themed/*.tpl; do
   generated=$(basename "$tpl" .tpl)

@@ -36,10 +36,15 @@
 # NOT IN THIS LIST FOR THE SAME REASON: quickshell, which draws the Omarchy
 # desktop (bar, menu, notifications, OSD, wallpaper, lock screen, tray and the
 # whole plugin system under shell/). Upstream installs it from
-# pkgs.omarchy.org; it is in neither official Arch nor archlinux32, so a tester
-# builds it from source:
+# pkgs.omarchy.org. Official Arch now carries it too -- extra/quickshell
+# 0.3.1-1 on x86_64, the exact version this fork wants -- but archlinux32 has
+# no package at all, and a name in this list has to resolve on both arches, so
+# it cannot go here. A tester builds it from source:
 #
 #   quickshell   github.com/quickshell-mirror/quickshell, tag v0.3.1
+#
+# (On x86_64 `pacman -S quickshell` is now the shorter route; see
+# docs/RELEASE-NOTES.md, "Package divergence from upstream".)
 #
 # Build commands, per arch, are in docs/runbooks/install-x86_64.md and
 # docs/runbooks/a1181-install.md. Quickshell links PRIVATE Qt APIs and must be
@@ -52,6 +57,12 @@
 # vulkan-headers -- headers only, there is no runtime Vulkan requirement) are
 # deliberately absent: they belong on the build host, not on a MacBook.
 # libgbm, which quickshell's screencopy needs, comes from mesa on both arches.
+#
+# qt6-imageformats is the one Qt runtime plugin that is easy to miss and is not
+# pulled in by qt6-base: it ships imageformats/libqwebp.so, and 79 of the 92
+# theme backgrounds this repo ships are .webp. Without it QImage cannot decode
+# them, so the wallpaper and the image picker come up empty. extra/6.11.2 on
+# x86_64, extra/6.7.2 on i686; both carry the WebP plugin.
 #
 # libvips is a RUNTIME dependency of the shell too, and the least obvious one.
 # The image picker under shell/plugins/image-picker does not read the theme
@@ -118,6 +129,7 @@ psmisc
 qrencode
 qt6-base
 qt6-declarative
+qt6-imageformats
 qt6-svg
 qt6-wayland
 re2

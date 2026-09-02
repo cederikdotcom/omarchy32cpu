@@ -720,6 +720,97 @@ i686 install too.
    direction - it hardcoded `--target=i386-efi` / `BOOTIA32.EFI` - and
    now picks the target from `uname -m`.
 
+## Package divergence from upstream (audited 2026-09-02)
+
+This fork installs 82 packages where upstream installs about 150. That gap
+used to be recorded as one sentence - "the Lite package set" - and every
+absence read as deliberate. It was not: several packages left during the sway
+port for reasons that no longer apply. This section is the audit, and it is
+the answer to "why is X not here" so the question does not get re-litigated
+from memory.
+
+**How availability was checked.** `pacman -Si` inside the two chroots on the
+build bench: `/opt/hyprdev/root` (official Arch x86_64, core + extra, sync
+databases of 2026-08-31) and `/opt/hypr32/root` (archlinux32 i686, core +
+extra + community, databases of 2026-08-24). Neither chroot has the AUR or
+`pkgs.omarchy.org`, so "in neither" below means "in neither distribution's
+own repositories" - upstream reaches several of those names through `yay` or
+its own repo. Versions quoted are what those databases held.
+
+Every name in `install/omarchy-base.packages` has to resolve on **both**
+arches, because the list is shared and pacstrap aborts on a target it cannot
+find. That constraint decides several rows on its own.
+
+Each row is one of four categories:
+
+- **(a) available and works now** - accepted.
+- **(b) no i686 package, but buildable or portable** - intent retained, and
+  what a build would take is written down.
+- **(c) truly incompatible** - excluded for a 64-bit firmware requirement, a
+  hard GPU requirement, or an evidenced runtime failure.
+- **(d) optional / nonessential** - deferred, on purpose, and said so here.
+
+### (a) Accepted into this fork
+
+| Package | Availability | Why it is here |
+|---|---|---|
+| `qt6-imageformats` | x86_64 extra 6.11.2, i686 extra 6.7.2 | **Added by the Quattro merge.** It ships `imageformats/libqwebp.so`, and 79 of the 92 backgrounds this repo ships are `.webp`. `qt6-base` does not pull it, so without it QImage cannot decode them and the shell's wallpaper and image picker come up empty. The fork took upstream's webp backgrounds without taking the plugin that reads them; this closes that. |
+| `greetd`, `greetd-tuigreet` | both arches, extra | The login path this fork actually boots. |
+| `grub`, `efibootmgr` | both arches, core | The 32-bit EFI boot path. |
+| `wlsunset` | both arches, extra 0.4.0 | Stands in for `hyprsunset`, which archlinux32 does not carry. |
+| `xdg-desktop-portal-wlr` | x86_64 extra 0.8.2, i686 extra 0.7.0 | Stands in for `xdg-desktop-portal-hyprland`, which is x86_64-only. |
+| `libvips` | x86_64 extra 8.18.6, i686 extra 8.11.3 | Thumbnails for the image picker; dropping it made the picker serve full-size originals. Both versions carry `vipsthumbnail` with `--size` and `--smartcrop`, and both link `libwebp`. |
+
+### (c) Truly incompatible - excluded, with the reason
+
+| Package | Availability | Concrete reason |
+|---|---|---|
+| `sddm` | both arches, extra | The greeter needs a GL context. There is no GPU. Replaced by greetd + tuigreet. |
+| `limine` | both arches, extra | Upstream boots a 64-bit UKI through limine. The A1181's Apple EFI is 32-bit and can only load `BOOTIA32.EFI`; there is no 32-bit limine boot path here. Replaced by GRUB `i386-efi`. |
+| `limine-mkinitcpio-hook`, `limine-snapper-sync` | neither arch | Same boot path, and neither is packaged anyway. |
+| `hyprland`, `hyprland-guiutils` | x86_64 extra 0.56.2, i686 absent | A repo Hyprland - even at the exact version this fork targets - has no pixman renderer and dies on missing GLES 3.0. The compositor must come from `cederikdotcom/Hyprland` branch `pixman-renderer` with `cederikdotcom/aquamarine` branch `cpu-backend`. |
+| `gpu-screen-recorder` | x86_64 only | Needs a GPU encoder. |
+| `vulkan-intel`, `vulkan-radeon`, `vulkan-asahi`, `nvidia-*`, `lib32-nvidia-*`, `libva-*-driver`, `intel-media-driver`, `libvpl`, `vpl-gpu-rt`, `egl-wayland` | mixed; several x86_64-only | GPU drivers and GPU media stacks on a machine whose entire premise is that no GPU is used. |
+
+### (b) No i686 package, but buildable or portable
+
+| Package | Availability | Status |
+|---|---|---|
+| `quickshell` | **x86_64 extra 0.3.1-1**, i686 absent | This changed under us: official Arch now carries the exact version this fork wants, so on x86_64 `pacman -S quickshell` replaces the from-source build in `docs/runbooks/install-x86_64.md` step 10. It cannot go in `install/omarchy-base.packages`, because that list has to resolve on i686 too. archlinux32 has nothing; i686 keeps the prebuilt stack tarball. Quickshell links private Qt APIs and has to be rebuilt on every `qt6-base` / `qt6-declarative` bump either way. |
+| `uwsm` | x86_64 extra 0.26.7, i686 absent | The fork ships a `uwsm-app` shim so the 28 detached-launch callers keep working and the session starts Hyprland directly. A real i686 port is a Python package plus its units - plausible, not yet done. |
+| `hyprsunset` | x86_64 extra 0.4.0, i686 absent | Replaced by `wlsunset`, which is in extra on both. Building it would drag the `hypr*` library set that this fork already replaces with its own build. |
+| `mbpfan`, `isight-firmware-tools` | neither arch | The two A1181-specific helpers, AUR upstream. Self-built for the fork package repo; `install/hardware/apple/fix-a1181.sh` skips them while absent. Listed in `install/omarchy-other.packages`. |
+| `eza` | x86_64 extra 0.23.5, i686 absent | Rust; buildable. Deferred - `ls` and `bat` cover it and nothing in the tree calls it. |
+| `mise-bin`, `voxtype-bin`, `yay`, and the Omarchy-repo apps (`aether`, `cliamp`, `herdr`, `omacut`, `omacalc`, `omawrite`, `omarchy-nvim`, `tensaku`, `tobi-try`, `ttfx`, `asdcontrol`, `xdg-terminal-exec`, `localsend`, `tzupdate`, `yaru-icon-theme`, `ttf-ia-writer`) | neither arch | Upstream reaches these through the AUR or `pkgs.omarchy.org`, which serves x86_64 only. Each would need a fork rebuild, and the fork package repo does not exist yet (see "Missing / open items"). Deferred with the app fleet. |
+
+### (d) Optional or nonessential - deferred on purpose
+
+Everything here **exists on both arches** unless noted. It is out because a
+2 GB, 1.83 GHz, 2006 machine does not need it in a core install, not because
+it cannot run. Anyone who wants one installs it; the Omarchy menu already
+offers most of them under Install.
+
+| Group | Packages | Note |
+|---|---|---|
+| Printing | `cups`, `cups-filters`, `cups-pk-helper`, `system-config-printer`, `avahi`, `nss-mdns` | All in extra on both arches. No print daemon in the core install, and `install/config/enable-services.sh` enables none. The cups-browsed hardening upstream added (`etc/cups/*`, `etc/sysusers.d/omarchy-cups-browsed.conf`, the service drop-in and migration `1787815267`) is kept in the tree so it is already correct if printing is added. |
+| Docker | `docker`, `docker-buildx`, `docker-compose`, `lazydocker` (`ufw-docker`: neither arch) | i686 has Docker 25.0.4. A container daemon is not core on this machine. `bin/omarchy-windows-vm` and the Docker menu entries stay, and simply need Docker installed first. |
+| Boot splash | `plymouth` (x86_64 26.134, i686 24.004) | Adds initramfs weight and hides exactly the boot messages a tester on unproven hardware needs to read. |
+| Power | `power-profiles-daemon`, `thermald`, `intel-lpmd` (x86_64 only) | A Core Duo exposes no platform profile for `power-profiles-daemon` to drive. |
+| The app fleet | `chromium`, `libreoffice-fresh`, `obsidian` (x86_64 only), `obs-studio`, `kdenlive`, `pinta`, `xournalpp`, `evince`, `imv`, `mpv`, `nautilus`, `moonlight-qt` (x86_64 only), `dua-cli`, `lazygit`, `zoxide`, `tldr`, `yt-dlp`, `zbar`, `tesseract`, `sushi`, `gnome-disk-utility`, `inxi`, `ffmpegthumbnailer`, `udiskie`, `gvfs-*`, `gnome-keyring` | The fork's stated position: 78-package core, bring your own apps. **`chromium` is the one with a concrete caveat**: archlinux32 carries 90.0.4430.212, from 2021. Installing it gets you a five-year-old browser with five years of unpatched CVEs, so the fork does not put it in the core install and the copy-url native host registers through `omarchy-install-chromium-copy-url` instead of `install/user/chromium.sh`. |
+| Dev toolchain | `clang`, `llvm`, `ruby`, `lua51`, `luarocks`, `tree-sitter-cli`, `python-gobject`, `python-poetry-core`, `mariadb-libs`, `postgresql-libs`, `libyaml`, `dotnet-runtime` (x86_64 only) | archlinux32 versions are old (clang 15, ruby 3.0). Not needed to run the desktop. |
+| Input methods | `fcitx5`, `fcitx5-gtk`, `fcitx5-qt`, `noto-fonts-cjk` | Deferred; `omarchy-fcitx5.service` is still shipped and enabled per-user, so adding the packages is enough to turn it on. |
+| `imagemagick` | extra on both | `bin/omarchy-bar-text-color` already guards it with `omarchy-cmd-present magick` and falls back, so the fork degrades rather than breaks. This is why `bar-text-color-test.sh` fails on a machine without ImageMagick. |
+| `hyprpicker` | x86_64 extra 0.4.7, i686 extra 0.4.1 | Available, and its i686 dependencies are cairo/wayland only - no GL. It is still out, because installing it on i686 pulls archlinux32's `hyprutils`, which this fork replaces with its own build for Hyprland 0.56. `bin/omarchy-capture-color` (grim + slurp) backs the Trigger > Capture > Color menu entry instead. |
+| `broadcom-wl` | x86_64 absent from core/extra, **i686 extra 6.30.223.271** | Upstream lists it for the ISO's offline mirror. It stays out of `install/omarchy-other.packages` because that list is shared with x86_64, where it does not resolve; `install/hardware/fix-bcm43xx.sh` still installs it on demand for the chips it matches. Worth revisiting for an i686 ISO. |
+| Other hardware | T2 MacBook (`apple-bcm-firmware`, `apple-t2-audio-config`, `linux-t2*`, `t2fanrd`), Surface, Dell XPS, Framework, ASUS, `tuxedo-*`, `yt6801-dkms`, `macbook12-spi-driver-dkms`, `qmk-hid`, `lsp-plugins-lv2` (x86_64 only) | All AUR or x86_64-only, and none of it is hardware this fork targets. |
+| Miscellaneous | `less`, `man-db`, `socat`, `unzip`, `whois`, `inetutils`, `inotify-tools`, `bash-completion`, `expac`, `pacman-contrib`, `kernel-modules-hook`, `bolt`, `ddcutil`, `dosfstools`, `exfatprogs`, `alsa-utils`, `bluez-tools`, `qemu-user-static-binfmt`, `woff2-font-awesome`, `gnome-themes-extra`, `libsecret`, `snapper`, `btrfs-progs`, `dkms`, `linux-headers`, `sof-firmware`, `webp-pixbuf-loader` | Small, all available on both arches, none of them load-bearing for boot or session. The cheapest ones (`less`, `man-db`, `unzip`, `bash-completion`) are the most defensible to bring back and are the first place to look if the core install feels bare. |
+
+**What this audit did not do.** It read package databases, not running
+systems. Nothing above was installed and exercised on i686 except what the
+existing install rehearsal already covers, so "available" means "resolves and
+its declared dependencies resolve", not "runs well on a Core Duo". The
+archlinux32 databases were also a week old at the time of the check.
+
 ## Missing / open items
 
 ### Blocking a real MacBook install
@@ -737,9 +828,11 @@ i686 install too.
   builds them.** This is the largest remaining install-friction item:
   1. **Hyprland + aquamarine** (this fork's branches), because the pixman
      renderer exists nowhere else.
-  2. **quickshell** 0.3.1, because it is in neither official Arch nor
-     archlinux32 - upstream gets it from pkgs.omarchy.org, which serves
-     x86_64 only.
+  2. **quickshell** 0.3.1 on i686, because archlinux32 has no package.
+     This is no longer true on x86_64: official Arch carries
+     extra/quickshell 0.3.1-1, exactly the version this fork wants, so
+     an x86_64 tester can `pacman -S quickshell` instead of building it
+     (checked 2026-09-02; see "Package divergence from upstream").
 
   Build commands are in `docs/runbooks/install-x86_64.md`, steps 9 and
   10. i686 no longer builds either: step 7 of

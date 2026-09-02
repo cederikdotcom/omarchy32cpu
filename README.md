@@ -143,7 +143,7 @@ Upstream README below.
 
 # Omarchy
 
-Omarchy is a beautiful, modern & opinionated Linux distribution by DHH.
+Omarchy is a beautiful, fun & agentic Linux distribution by DHH.
 
 Read more at [omarchy.org](https://omarchy.org).
 

@@ -16,24 +16,27 @@
 # session is still Hyprland itself. The shell already does this
 # (bin/omarchy-launch-shell tags itself omarchy-shell); this makes the pair
 # symmetric.
+#
+# The session command is written out literally rather than expanded from a
+# variable: /etc/greetd/config.toml is root-owned and root executes what it
+# names, so nothing the installing user controls may reach it.
 mkdir -p /etc/greetd
 
-session_cmd="systemd-cat -t omarchy-session /usr/share/omarchy/bin/omarchy-hyprland-launch"
-
-cat >/etc/greetd/config.toml <<EOF
+cat >/etc/greetd/config.toml <<'EOF'
 [terminal]
 vt = 1
 
 [default_session]
-command = "tuigreet --cmd '$session_cmd'"
+command = "tuigreet --cmd 'systemd-cat -t omarchy-session /usr/share/omarchy/bin/omarchy-hyprland-launch'"
 user = "greeter"
 EOF
 
 if [[ -n ${OMARCHY_INSTALL_USER:-} ]]; then
+  # omarchy:heredoc-expands paths=none -- OMARCHY_INSTALL_USER is the account name the installer just created, and the session command beside it is a literal absolute path under root-owned /usr/share/omarchy
   cat >>/etc/greetd/config.toml <<EOF
 
 [initial_session]
-command = "$session_cmd"
+command = "systemd-cat -t omarchy-session /usr/share/omarchy/bin/omarchy-hyprland-launch"
 user = "$OMARCHY_INSTALL_USER"
 EOF
 fi

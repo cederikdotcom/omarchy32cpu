@@ -1,5 +1,14 @@
 # Packages installed outside of install/packages.sh or optional packages
 # Utilized by ISO builder to ensure package availability in the ISO
+#
+# Upstream's copy of this file is a hardware-driver catalogue: nvidia, vulkan,
+# intel media, T2 MacBook, Surface, Dell XPS, Framework, limine and the dkms
+# stack behind them. None of it applies to a GPU-less machine, and almost all
+# of it is AUR or x86_64-only. broadcom-wl is the one entry with real bearing
+# on a MacBook, and install/hardware/fix-bcm43xx.sh already installs it on
+# demand for the chips it matches. The per-package reasoning, with the
+# availability check behind it, is in docs/RELEASE-NOTES.md under "Package
+# divergence from upstream".
 
 base-devel
 gst-plugin-pipewire

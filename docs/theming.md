@@ -101,7 +101,8 @@ shell palette is loaded from:
   `color4`
 - `muted` — de-emphasized elements (comments, placeholders, dividers); also
   serves as ANSI `color8`
-- `urgent` / `red` / `color1`
+- `red` / `color1` — populate the shell's urgent role; there is no `urgent`
+  palette key (one defined in `colors.toml` is ignored)
 
 Themes and user templates using the legacy short names remain supported.
 Canonical names take precedence when both forms are defined, and resolved
@@ -341,10 +342,11 @@ BorderSurface {
 }
 ```
 
-Use `Border.surfaceSpec(section, token, fallbackColor, fallbackWidth)` for
-shell theme tokens, `Border.controlSpec(state, foreground, accent)` for shared
-controls, and `Border.flat(color, width)` for a deliberate local border that
-should not be overridden by the active theme. `Color.<section>.border` is the
+Use `Border.surfaceSpec(section, token, fallbackColor, fallbackWidth, alphaKey)`
+for shell theme tokens (the optional `alphaKey` names the alpha token, e.g.
+`"border-alpha"`), `Border.controlSpec(state, foreground, accent, urgent)` for
+shared controls, and `Border.flat(color, width)` for a deliberate local border
+that should not be overridden by the active theme. `Color.<section>.border` is the
 flat first-stop color for consumers that cannot render full border specs.
 
 ## Hyprland templates

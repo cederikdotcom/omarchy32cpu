@@ -215,18 +215,16 @@ assertEqual(
   'setup.reset',
   'menu lists Reset Computer last under Setup'
 )
-// FORK: upstream expects `agy` (renamed from `gemini`) and `ori`. Both landed
-// upstream after this fork branched and bin/omarchy-default-agent still carries
-// the older set, so menu and command agree with each other but not yet with
-// upstream. Put both rows back when the agent list is synced.
 const expectedAgents = {
-  gemini: { icon: '󰫢', label: 'Gemini' },
+  agy: { icon: '󰫢', label: 'Antigravity' },
   pi: { icon: '\ue901', iconFont: 'omarchy', label: 'Pi' },
   omp: { icon: '\ue903', iconFont: 'omarchy', label: 'omp' },
   opencode: { icon: '\ue902', iconFont: 'omarchy', label: 'OpenCode' },
+  ori: { icon: '\ue909', iconFont: 'omarchy', label: 'Ori' },
   claude: { icon: '󰛄', label: 'Claude' },
   codex: { icon: '\ue905', iconFont: 'omarchy', label: 'Codex' },
   grok: { icon: '\ue904', iconFont: 'omarchy', label: 'Grok' },
+  hermes: { icon: '\ue90a', iconFont: 'omarchy', label: 'Hermes' },
   copilot: { icon: '', label: 'Copilot' },
   crush: { icon: '󰋑', label: 'Crush' },
 }
@@ -247,8 +245,7 @@ assertDeepEqual(
   defaultItems
     .filter(item => item.parent === 'setup.default.agent')
     .map(item => item.label),
-  // FORK: same agent drift as above.
-  ['Claude', 'Codex', 'Copilot', 'Crush', 'Gemini', 'Grok', 'omp', 'OpenCode', 'Pi'],
+  ['Antigravity', 'Claude', 'Codex', 'Copilot', 'Crush', 'Grok', 'Hermes', 'omp', 'OpenCode', 'Ori', 'Pi'],
   'menu sorts coding agents alphabetically'
 )
 const expectedDefaults = {
@@ -260,13 +257,9 @@ assert(
   Object.entries(expectedDefaults).every(([type, labels]) => {
     const entries = defaultItems.filter(item => item.parent === `setup.default.${type}`)
     return entries.map(item => item.label).join('\0') === labels.join('\0')
-      && entries.every(item => !item.when || /^omarchy-cmd-present [\w.-]+$/.test(item.when))
+      && entries.every(item => !item.when)
   }),
-  // FORK: upstream asserts no `when` here because it preinstalls these apps and
-  // wants every choice always listed. This fork ships no applications (the Lite
-  // package set), so each row is guarded by a presence test and a machine without
-  // Chromium is not offered Chromium as its default. List and order stay upstream's.
-  'menu exposes every supported browser, terminal, and editor under Defaults, each guarded only by a presence test'
+  'menu always exposes every supported browser, terminal, and editor under Defaults'
 )
 assert(!defaultById['install.ai.crush'], 'menu removes Crush from Install > AI')
 // Software you already have keeps its place in Install, dimmed rather than
@@ -307,27 +300,21 @@ assertDeepEqual(
   defaultItems
     .filter(item => item.parent === 'remove')
     .map(item => item.id),
-  // FORK: this fork reordered the Install and Remove category headers during the
-  // shim era and swapped the AI submenu for a single Dictation row. The order
-  // below is what this tree actually ships; it no longer mirrors upstream's, and
-  // it does not fully mirror this fork's own Install order either. Reconciling
-  // the menu category order with upstream is a separate convergence pass -- every
-  // other assertion in this file is upstream's, unchanged.
   [
     'remove.package',
-    'remove.webapp',
-    'remove.tui',
+    'remove.ai',
+    'remove.service',
     'remove.development',
     'remove.theme',
-    'remove.browser',
-    'remove.dictation',
     'remove.gaming',
-    'remove.service',
+    'remove.browser',
+    'remove.webapp',
+    'remove.tui',
     'remove.windows',
     'remove.preinstalls',
     'remove.security'
   ],
-  'menu orders Remove categories the way this tree ships them'
+  'menu orders Remove categories like their Install counterparts, followed by Remove-only categories'
 )
 assert(
   defaultById['setup.security.passwordless-sudo'].action.includes('omarchy-sudo-passwordless'),
@@ -650,5 +637,5 @@ assert(
 JS
 
 font_charset=$(fc-query --format='%{charset}' "$ROOT/default/fonts/omarchy/omarchy.ttf")
-[[ $font_charset == *"e900-e909"* ]] || fail "Omarchy icon font includes every custom menu glyph"
+[[ $font_charset == *"e900-e90a"* ]] || fail "Omarchy icon font includes every custom menu glyph"
 pass "Omarchy icon font includes the official agent marks"

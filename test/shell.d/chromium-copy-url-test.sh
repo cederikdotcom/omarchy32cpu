@@ -71,9 +71,10 @@ jq -e --arg path "$ROOT/bin/omarchy-chromium-copy-url-host" '
 ' "$native_manifest" >/dev/null || fail "copy-url native host manifest uses Omarchy host path and extension id"
 pass "copy-url native host installer registers the stable extension id"
 
-# Chromium is no longer preinstalled, so the native host registers through the
-# optional omarchy-install-chromium-copy-url path covered above. The user
-# install must not source the retired chromium.sh step.
+# Chromium is not in this fork's package set (archlinux32 carries only 90.0,
+# from 2021), so a fresh install never has it and the native host registers
+# through the optional omarchy-install-chromium-copy-url path covered above.
+# The user install must not source the retired chromium.sh step.
 grep -q 'user/chromium.sh' "$ROOT/install/user/all.sh" &&
   fail "user install still sources the retired Chromium setup step"
 pass "user install leaves Chromium registration to the optional installer"
