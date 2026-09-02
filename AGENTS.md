@@ -19,6 +19,12 @@ Three documentation trees, split by genre and audience:
 - `docs/` - reference on how the system is shaped (file layout, update pipeline, theming, shell architecture), for anyone working on the codebase; skills link here for depth
 - `manual/` - end-user documentation for using Omarchy, published; never codebase internals
 
+# Divergence from upstream
+
+This is a fork. Every path where it differs from upstream `omacom/omarchy` belongs to exactly one entry in [`.github/divergence/registry.json`](.github/divergence/registry.json), and each entry has a GitHub issue that the sync workflow keeps weighted and current. [`docs/divergence.md`](docs/divergence.md) covers the schema and the rules.
+
+Adding a fork-only file, or forking one upstream owns, means adding it to an entry's `pathspecs` in the same commit. The scheduled sync fails loudly on any path no entry claims, or that two entries claim, so unrecorded drift does not survive a day.
+
 # Style
 
 - In markdown documents (`plans/`, `docs/`, `manual/`), write full lines — no hard wrapping at 80 columns; break only at structural boundaries like headings and list items
