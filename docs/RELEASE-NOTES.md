@@ -750,6 +750,14 @@ Each row is one of four categories:
   hard GPU requirement, or an evidenced runtime failure.
 - **(d) optional / nonessential** - deferred, on purpose, and said so here.
 
+### What i686 and package convergence mean here
+
+`i686` is the 32-bit x86 userspace and machine-code target used by the original Intel Core Duo in the A1181. It is not another name for the MacBook's firmware: the processor and operating system are 32-bit x86, while the separate boot constraint is Apple's 32-bit EFI, which must be able to load `BOOTIA32.EFI`. A component may therefore fail the compatibility test because it has no i686 build, because it assumes GPU facilities the GMA 950 cannot provide, or because its boot design requires 64-bit EFI. Those are different problems and should not be grouped together.
+
+The fork is not "five packages away" from literal package convergence. Five visible upstream functions currently have named substitutes or exclusions: SDDM is replaced by greetd, Limine by GRUB `i386-efi`, `hyprsunset` by `wlsunset`, `xdg-desktop-portal-hyprland` by `xdg-desktop-portal-wlr`, and `gpu-screen-recorder` needs a future CPU recorder such as `wf-recorder`. They are only the headline compatibility boundary. The tables below also contain optional applications, hardware stacks, development tools, and upstream-repository packages that are deliberately absent from the 2 GB core install.
+
+Convergence means carrying upstream behavior wherever it works on this target, not necessarily installing the identical package name. Treat every difference independently: use the upstream package when it resolves and runs on i686; port or rebuild it when that provides real value, as this fork did for Hyprland and Quickshell; retain a substitute when it implements the same behavior with fewer target-specific liabilities; and keep an exclusion only when an evidenced firmware, GPU, security, or resource constraint remains.
+
 ### (a) Accepted into this fork
 
 | Package | Availability | Why it is here |
