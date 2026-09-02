@@ -5,23 +5,27 @@ UEFI firmware -> BOOTIA32.EFI -> GRUB -> i686 kernel -> greetd -> a
 session with the pixman renderer on screen). See
 docs/a1181-gap-analysis.md for the plan and testbench.md for the VM.
 
-MID-MIGRATION WARNING: that rehearsal ran the sway session this fork
-used before the pixman renderer for Hyprland existed. sway is now
-deleted and the session is upstream Hyprland on the pixman renderer, so
-step 5b below is new and the rehearsal has not been repeated. The i686
-compositor build is also the hardest part of this runbook: archlinux32
-carries no aquamarine, hyprcursor or hyprgraphics, its hyprutils and
-hyprlang are far too old, and its newest lua is 5.4 while Hyprland 0.56
-requires 5.5. All of those have to be built for i686 alongside the two
-override packages below. Open items: that build, and the on-hardware
-GPU spike.
+STATE ON 2026-09-02: steps 5b and 5c below were rebuilt from the current
+fork HEADs and installed into the i686 VM, and **the full Quickshell
+desktop runs on i686 in 2048 MB**: the bar, the tray, the clock and the
+theme wallpaper on the pixman compositor with Qt's software scenegraph,
+at 1280x800 on the VM's own DRM display. Screenshot evidence and the
+memory series are in step 5c. The i686 compositor build is still the
+hardest part of this runbook: archlinux32 carries no aquamarine,
+hyprcursor or hyprgraphics, its hyprutils and hyprlang are far too old,
+and its newest lua is 5.4 while Hyprland 0.56 requires 5.5. All of those
+have to be built for i686 alongside the two override packages below.
 
-The Quickshell desktop is back as well, so step 5c is new too: the shell
-under `shell/` is the real upstream QML again, drawn by Qt Quick's
-software scenegraph on top of the pixman compositor. It builds and runs
-on i686, with two features switched off (audio and the crash handler)
-for want of new enough archlinux32 packages. Its cost on a 2 GB machine
-is the one number nobody has measured yet.
+**One thing still blocks an unattended i686 login, and you will meet it.**
+Started by greetd, the session reaches the compositor and the shell and
+then Hyprland aborts with `malloc(): invalid size (unsorted)`. It is
+heap corruption inside the render pass, it is i686-only so far, and it
+did not happen in every run: bringing the compositor and the shell up by
+hand succeeded on the second try and then stayed up for the whole
+measurement session. Details, backtrace and the workaround are under
+"Troubleshooting" below. Expect to fight it on the first login.
+
+The remaining open item is unchanged: the on-hardware GMA 950 spike.
 
 Rehearsal lessons now baked into the steps below:
 - Set `Architecture = i686` in /etc/pacman.conf of the installed system
@@ -112,24 +116,53 @@ Rehearsal lessons now baked into the steps below:
    git clone --depth 1 --branch v0.3.1 \
      https://github.com/quickshell-mirror/quickshell /opt/quickshell
    cd /opt/quickshell
+
+   # Two-line pipewire 0.3.65 compatibility patch, see below.
+   sed -i '/^[[:space:]]*\.bound_props = nullptr,$/d' src/services/pipewire/core.cpp
+   sed -i 's/SPA_KEY_NODE_DESCRIPTION/PW_KEY_NODE_DESCRIPTION/' src/services/pipewire/node.cpp
+
    cmake -GNinja -B build -DCMAKE_BUILD_TYPE=Release \
+     -DCMAKE_INSTALL_PREFIX=/usr \
      -DDISTRIBUTOR="omarchy32cpu" \
      -DCRASH_HANDLER=OFF \
-     -DSERVICE_PIPEWIRE=OFF \
+     -DSERVICE_PIPEWIRE=ON \
      -DINSTALL_QML_PREFIX=lib/qt6/qml
    ninja -C build && ninja -C build install
    ```
 
-   Two flags are i686-specific and both cost a feature:
+   `-DCMAKE_INSTALL_PREFIX=/usr` puts the QML modules in
+   `/usr/lib/qt6/qml`, beside archlinux32's own Qt. That is the layout
+   the i686 desktop was verified on. The x86_64 runbook leaves the
+   prefix at cmake's `/usr/local` default and works, so treat this as
+   the tested choice rather than a proven requirement.
 
-   - `-DSERVICE_PIPEWIRE=OFF` because archlinux32 ships pipewire
-     0.3.65 and Quickshell's pipewire service needs
-     `pw_core_events.bound_props`, which is newer. Without it the
-     build fails; with it `omarchy.audio` has no source and the bar
-     has no volume control. Building a newer pipewire as a third i686
-     override package is the way out, and has not been done.
-   - `-DCRASH_HANDLER=OFF` because the handler needs `cpptrace`,
-     which archlinux32 does not carry at all.
+   `-DCRASH_HANDLER=OFF` because the handler needs `cpptrace`, which
+   archlinux32 does not carry at all. That flag still costs a feature.
+
+   **The pipewire service builds ON, with a two-line patch.** The
+   previous recipe here said `-DSERVICE_PIPEWIRE=OFF` and gave up the
+   bar's volume control with it. That was more than the problem needed.
+   archlinux32 still ships pipewire 0.3.65, and exactly two symbols in
+   Quickshell's pipewire service are newer than it:
+
+   - `src/services/pipewire/core.cpp` sets `.bound_props = nullptr` in a
+     designated initializer for `pw_core_events`. 0.3.65 has no such
+     field. The line only writes a null pointer, and the listener
+     already announces `PW_VERSION_CORE_EVENTS`, which is 0 on this
+     pipewire, so the server never emits that event. Deleting the line
+     changes nothing at run time.
+   - `src/services/pipewire/node.cpp` reads `SPA_KEY_NODE_DESCRIPTION`,
+     which 0.3.65's `spa/node/keys.h` does not define.
+     `PW_KEY_NODE_DESCRIPTION` in `pipewire/keys.h` is the same string,
+     `"node.description"`.
+
+   Neither edit changes behaviour on a newer pipewire either, so there is
+   one recipe for both arches. Verified on i686 2026-09-01: the build
+   completes, `ldd -r /usr/bin/quickshell` reports no undefined symbol,
+   and the binary links `libpipewire-0.3.so.0`. Whether the audio panel
+   is fully functional against a 0.3.65 daemon is still unverified, and a
+   hardware report saying so is welcome; what is verified is that it is
+   present rather than absent.
 
    **Also install the icu75 shim**, or Quickshell will not start:
    archlinux32's `qt6-base` 6.7.2 was built against ICU 75 and links
@@ -146,27 +179,50 @@ Rehearsal lessons now baked into the steps below:
    `qt6-base` or `qt6-declarative` is upgraded, or it dies on an ABI
    mismatch. Pin those two if you are not prepared to rebuild.
 
-   RAM is the open question on this machine, not correctness. The
-   x86_64 VM measures the full shell at 234 MB RSS on the default
-   theme against 96 MB for the shim stack it replaces (waybar + mako +
-   swaybg), so expect roughly +140 MB on a 2 GB machine. It does not
-   leak: idle is flat over fifteen minutes.
+   **RAM is no longer the open question: the desktop fits.** Measured
+   2026-09-02 in the i686 VM cut down to 2048 MB, the same size as the
+   MacBook, at the panel's 1280x800:
 
-   What it does do is hold the wallpaper at full decoded size, so
-   `RSS ~= 190 MB + the decoded size of the current background`. The
-   backgrounds under `themes/` decode to between 6 MB (1536x1024) and
-   138 MB (10456x3455), which on the largest one means 350 MB steady
-   and a 491 MB peak while a theme switch crossfades. On a 1280x800
-   panel none of that resolution is visible. **If RAM is tight here,
-   the lever is the wallpaper, not the plugin set**: point the theme at
-   a background scaled to the panel and the shell drops back to about
-   195 MB. zram makes the rest affordable but not free.
+   | | Quickshell RSS | system in use | left for apps |
+   |---|---|---|---|
+   | greeter, no session | - | 314 MB | 1641 MB |
+   | desktop idle, default wallpaper | 210 MB | 489 MB | 1466 MB |
+   | plus a foot terminal | 210 MB | 503 MB | 1452 MB |
+   | largest shipped wallpaper | 272 MB | 563 MB | 1392 MB |
+   | smallest shipped wallpaper | 144 MB | 439 MB | 1516 MB |
+
+   The compositor is 61 MB of that, Xwayland 45 MB and foot 16 MB. Peak
+   `VmHWM` across the wallpaper swaps was 492 MB, because the outgoing,
+   incoming and base copies are resident together during a crossfade.
+   A 1.3 GB workload, which is a browser with a few tabs, ran on top of
+   the idle desktop with 260 MB still free and never touched swap.
+
+   The shell is **smaller on i686 than on x86_64**: 32-bit pointers take
+   the fixed part from about 190 MB down to about 135 MB. The rest is
+   the wallpaper, held at its full stored resolution:
+
+       RSS ~= 135 MB + the decoded size of the current background
+
+   The backgrounds under `themes/` decode to between 6 MB (1536x1024)
+   and 138 MB (10456x3455), median 32 MB, and the default theme's
+   default background is 78 MB (6016x3384). On a 1280x800 panel none of
+   that resolution is visible, so **the wallpaper is still the lever if
+   you want the memory back**: the smallest shipped background saves
+   66 MB against the default and 128 MB against the largest.
+
+   zram comes up on its own (see `install/config/memory-tuning.sh`) as a
+   1.9 GB device at priority 100. Note that archlinux32's i686 kernel
+   offers only `lzo-rle` and `lzo` for zram, so the `zstd` the config
+   asks for silently becomes `lzo-rle`: expect about 2:1 rather than
+   3:1. It made no difference to any measurement above, because nothing
+   ever swapped.
 
    Do not drop `libvips`. Without it the image picker cannot build
    thumbnails and falls back to the full-resolution originals, which is
    how a single theme becomes several hundred MB. **None of this has
-   been measured on the real MacBook** - it is exactly the kind of
-   number a hardware report should carry.
+   been measured on the real MacBook** - the VM has no GMA 950 and a
+   Core Duo is slower than the emulated one, so the timings will differ
+   even where the megabytes do not.
 6. Put the repo at /usr/share/omarchy, create the user, then run
    `omarchy-apply-system --install-user <user> --first-install` in the
    chroot (validated end to end: config, hardware, greetd login,
@@ -218,6 +274,14 @@ core package list) and the override second. Both overrides carry a
 higher version than the repo package, so a later `pacman -Syu` will not
 pull them back down.
 
+The same applies to fontconfig, and it bites in a way that is easy to
+miss: `fontconfig` is in `install/omarchy-base.packages`, so pacstrap
+and any later `pacman -S --needed` of the core list put the repo's
+2:2.14.1 back over the override. Install the override **after** the core
+list, not before, and check with `pacman -Q fontconfig` that you still
+have `2:2.18.3-2`. If a post-transaction hook prints `undefined symbol:
+FcConfigSetDefaultSubstitute`, that is exactly what happened.
+
 Verified 2026-08-31 in an archlinux32 i686 chroot: after the neatvnc
 override, `ldd -r /usr/bin/wayvnc` reports 0 undefined symbols and
 `wayvnc --version` prints `v0.8.0-15d09b0 / neatvnc: v0.8.1-0708156`.
@@ -243,10 +307,46 @@ PKGBUILD or pacman will refuse the install as breaking wayvnc's
 
 ## Troubleshooting
 
+- **Hyprland aborts with `malloc(): invalid size (unsorted)` and greetd
+  drops you on the tuigreet greeter.** This is the open i686 blocker.
+  What you see in the journal is two crashes, and only the first one
+  matters. The first is heap corruption: glibc aborts at whatever
+  allocates next, so the reported site moves around, but a core taken
+  from the VM puts it under
+  `CHyprPixmanRenderer::endRender -> CRenderPass::render ->
+  CRenderPass::simplify -> CRegion::subtract -> pixman_region32_subtract
+  -> realloc`, on the DRM page-flip path. The second crash is
+  `start-hyprland` restarting the compositor with `--safe-mode`, where
+  `CCompositor::openSafeModeBox` calls `CAsyncDialogBox::open` and
+  segfaults because `hyprland-dialog` (from `hyprland-qtutils`, absent
+  on archlinux32) is not there. So one render bug turns into a login
+  loop.
+
+  It is not the CPU model (it reproduces on `-cpu max` as well as
+  `-cpu coreduo`), not concurrency alone (it reproduces with one vCPU),
+  and not the screencopy portal (it reproduces with
+  `xdg-desktop-portal-wlr` masked). The headless i686 harness in the
+  build chroot never hits it, which points at the DRM path rather than
+  at the renderer's arithmetic in general.
+
+  Until it is fixed, bring the session up by hand and retry: start the
+  compositor, and when it survives its first frames start the shell
+  against it. That worked on the second attempt and then ran for over an
+  hour with a terminal and a 1.3 GB workload on top.
+
 - **The session dies with a fontconfig symbol error:** the fork's
-  fontconfig override is missing. Install it from the fork repo (or
-  rebuild fontconfig >= 2.16 from the Arch PKGBUILD with docs disabled
-  and meson >= 1.11 from pip).
+  fontconfig override is missing, or a later `pacman -S` of the core
+  package list put the repo's 2:2.14.1 back over it. Reinstall the
+  override (or rebuild fontconfig >= 2.16 from the Arch PKGBUILD with
+  docs disabled and meson >= 1.11 from pip).
+- **Hyprland dies at startup and the log ends with dconf warnings**
+  (`failed to commit changes to dconf: Could not connect`): the
+  compositor is writing the cursor theme into gsettings, and
+  archlinux32's `dconf` is built against a newer glib2 than the repo
+  ships, so `dconf-service` cannot start (`undefined symbol:
+  g_variant_builder_init_static`). The fork turns that write off in
+  `default/hypr/looknfeel.lua` with `cursor.sync_gsettings_theme =
+  false`. If you are running an older config, set it yourself.
 - **Hyprland exits complaining about GLES 3.0:** the installed Hyprland
   or aquamarine is a stock build, not the fork's. Only the fork's
   branches carry the pixman renderer.
@@ -265,5 +365,10 @@ PKGBUILD or pacman will refuse the install as breaking wayvnc's
   reload `uvcvideo`.
 - **Screen sharing fails in calls:** permanent under the pixman
   renderer. Not a bug.
-- **System thrashes:** zram (`zram-size=ram`, zstd) and systemd-oomd
-  come configured. On 2 GB, keep heavy apps to one at a time.
+- **System thrashes:** zram (`zram-size=ram`) and systemd-oomd are
+  installed and enabled by `install/config/memory-tuning.sh`. Check with
+  `swapon --show`; you want a 1.9 GB `/dev/zram0` at priority 100. The
+  config asks for zstd and the i686 kernel gives you `lzo-rle`, which is
+  the only compressor its zram offers. On 2 GB the desktop itself leaves
+  about 1.45 GB free, so one heavy app at a time is comfortable and two
+  is where zram starts earning its keep.

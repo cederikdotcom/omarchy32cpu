@@ -144,14 +144,16 @@ What the fork still owns here:
   is built from source per the runbooks. Its runtime dependencies (the
   `qt6-*` set, `jemalloc`, `glib2`, `libxcb`, `wayland`) are in the list
   and verified on both arches.
-- **i686 build flags.** `-DSERVICE_PIPEWIRE=OFF` (archlinux32's pipewire
-  0.3.65 predates the API Quickshell's audio service needs, so 32-bit has
-  no `omarchy.audio` until a newer pipewire is built) and
-  `-DCRASH_HANDLER=OFF` (`cpptrace` is absent on archlinux32; kept off on
-  x86_64 too so both arches share one recipe). i686 also needs the
-  `icu75` legacy package, because its `qt6-base` 6.7.2 links
-  `libicui18n.so.75` against a repo `icu` of 78 - the same drift class as
-  the fontconfig and libxml2 problems.
+- **i686 build flags.** `-DCRASH_HANDLER=OFF` (`cpptrace` is absent on
+  archlinux32; kept off on x86_64 too so both arches share one recipe)
+  and, on i686, `-DCMAKE_INSTALL_PREFIX=/usr` so the QML modules land
+  beside the distro Qt. `-DSERVICE_PIPEWIRE` is
+  **ON** on both arches since 2026-09-02: archlinux32's pipewire 0.3.65
+  needs a two-line source patch, not a disabled service. See "The
+  pipewire decision, reversed" below. i686 also needs the `icu75` legacy
+  package, because its `qt6-base` 6.7.2 links `libicui18n.so.75` against
+  a repo `icu` of 78 - the same drift class as the fontconfig and
+  libxml2 problems.
 - **Four `MultiEffect` uses** are the only shader-dependent QML in the
   tree (tray icon colorization, lock blur, and two masked reveals in
   Background and ImagePicker). The software backend cannot run them. All
@@ -259,9 +261,166 @@ a glibc leak and is neither. Purging every jemalloc arena
 proves the resident pages are live image data rather than retained free
 space.
 
-**Not yet re-validated on i686, and never on real hardware.** Those
-figures on a 2 GB MacBook are the open question, and a hardware report
-carrying them would be worth more than any further VM work.
+## The i686 desktop, and the 2 GB answer (2026-09-02)
+
+The whole stack was rebuilt for i686 from the current fork HEADs
+(Hyprland `pixman-renderer` 63417a30, aquamarine `cpu-backend` 60a765d)
+in the archlinux32 chroot, Quickshell 0.3.1 was built beside it,
+everything was installed into the i686 VM, and the VM was held at
+**2048 MB** on `-cpu coreduo -smp 2` so the numbers mean something for
+the MacBook. The full
+desktop came up on the VM's own DRM display at 1280x800: the bar, the
+workspace pills, the clock, the tray and the theme wallpaper, on the
+pixman compositor with Qt's software scenegraph. Screenshot (QEMU
+`screendump`, not `grim`): `docs/pixman-renderer/i686-quickshell.png`.
+
+**It fits, with room to spare.** Measured in that VM:
+
+| | Quickshell RSS | system in use | left for apps |
+|---|---|---|---|
+| greeter, no session | - | 314 MB | 1641 MB |
+| desktop idle, default wallpaper (78 MB decoded) | 210 MB | 489 MB | 1466 MB |
+| plus a foot terminal | 210 MB | 503 MB | 1452 MB |
+| largest shipped wallpaper (138 MB decoded) | 272 MB | 563 MB | 1392 MB |
+| smallest shipped wallpaper (6 MB decoded) | 144 MB | 439 MB | 1516 MB |
+
+The compositor is 61 MB of that (68 MB on the largest wallpaper),
+Xwayland 45 MB, foot 16 MB. Peak `VmHWM` across the wallpaper swaps was
+492 MB, the crossfade cost. Then a 1.3 GB workload, which is a browser
+with a handful of tabs, was held resident on top of the idle desktop:
+260 MB still free, zram never touched more than 1 MB, and the
+compositor, the shell and the terminal all stayed up.
+
+**The shell is smaller on i686 than on x86_64**, which was not the
+expected direction. The fixed part drops from about 190 MB to about
+135 MB on 32-bit pointers, and the wallpaper model is otherwise the
+same:
+
+    RSS ~= 135 MB + the decoded size of the current background
+
+Fitted against four backgrounds in the same session: 6 MB -> 144 MB,
+32 MB -> 206 MB, 78 MB -> 210 MB, 138 MB -> 272 MB, and back to 6 MB ->
+144 MB, so it still releases. The lever, if a real machine turns out
+tighter than the VM, is still the wallpaper: the smallest shipped
+background is 66 MB below the default and 128 MB below the largest, and
+none of that resolution is visible on a 1280x800 panel.
+
+zram is a 1.9 GB device at priority 100 and never mattered in any of
+this. Note that archlinux32's i686 kernel offers only `lzo-rle` and
+`lzo` for zram, so the `zstd` in the config silently becomes `lzo-rle`:
+about 2:1 rather than 3:1.
+
+Verified on the same session: `QSG_INFO=1` prints `Loading backend
+software` and the process holds no `/dev/dri` descriptor. On i686 the
+process does map `swrast_dri.so` and `libEGL_mesa`, which x86_64 did
+not - that is qtwayland probing for an EGL platform integration at
+startup, not the scenegraph. The RSS settles the question either way:
+llvmpipe rendering costs three times this.
+
+### What is still broken on i686
+
+**The session crashes on login, and this is the one thing to fix next.**
+Started by greetd, the compositor and the shell both come up and then
+Hyprland aborts with `malloc(): invalid size (unsorted)`. It is heap
+corruption, so glibc reports it at whatever allocates next and the site
+moves between runs (`wl_client_create` in one, a pixman region realloc
+in another). A core taken from the VM puts the corruption on the DRM
+page-flip path:
+
+    CDRMBackend::dispatchEvents -> handlePageFlip
+      -> CMonitorFrameScheduler::onFrame
+      -> IHyprRenderer::renderMonitor
+      -> CHyprPixmanRenderer::endRender
+      -> CRenderPass::render -> CRenderPass::simplify
+      -> Hyprutils::Math::CRegion::subtract
+      -> pixman_region32_subtract -> realloc -> abort
+
+`start-hyprland` then restarts the compositor with `--safe-mode`, and
+the safe-mode dialog is a second, independent crash:
+`CCompositor::openSafeModeBox` calls `CAsyncDialogBox::open`, which
+segfaults because `hyprland-dialog` (from `hyprland-qtutils`, absent on
+archlinux32) is not installed. So one render bug becomes a login loop.
+
+Ruled out: the CPU model (reproduces on `-cpu max` as well as
+`-cpu coreduo`, so this is not a Core Duo instruction-set problem),
+concurrency alone (reproduces with one vCPU), library drift between the
+build chroot and the VM (identical versions of pixman, cairo, pango,
+glib2, libdrm, mesa, libxkbcommon, wayland, gcc-libs and glibc), and the
+screencopy portal (reproduces with `xdg-desktop-portal-wlr` masked). The
+headless i686 harness in the build chroot never hits it, which points at
+the DRM path rather than at the renderer in general. Two fork sites are
+worth reading first: `CPixmanTexture::writePixels`, which memcpys damage
+rects into a `std::vector` sized `stride * height`, and
+`CHyprPixmanRenderer::saveBufferForMirror`, which composites the full
+mirror framebuffer out of the target image. A third, latent: 16 bpp
+formats (`DRM_FORMAT_RGB565`) get `stride = width * 2` in both
+`CPixmanTexture::allocate` and `CPixmanFramebuffer::internalAlloc`,
+which is not the 4-byte-aligned stride pixman requires for an odd width.
+
+Bringing the compositor and the shell up by hand works: the compositor
+survived on the second attempt and then ran for over an hour under the
+whole measurement series. That is how every number above was obtained.
+
+### Two i686 bugs fixed on the way
+
+22. **The cursor theme's gsettings write killed the compositor.**
+    Hyprland's `cursor:sync_gsettings_theme` writes the cursor theme
+    into gsettings so GTK apps follow it, and glib routes that through
+    dconf. archlinux32 ships a `dconf` built against a newer glib2 than
+    the repo has, so `dconf-service` cannot start at all (`undefined
+    symbol: g_variant_builder_init_static`) and the write corrupts the
+    compositor's heap. `default/hypr/looknfeel.lua` now sets
+    `cursor.sync_gsettings_theme = false`. This is the fifth
+    dependency-drift bug of the fontconfig / libxml2 / neatvnc / icu75
+    class, and the first one that is fatal rather than cosmetic.
+23. **The memory tuning was never installed.** `zram-generator.conf.d`,
+    the oomd drop-ins, the reclaim sysctls and the zswap tmpfiles rule
+    live in the tree and are quoted throughout these notes, but upstream
+    ships them inside its pacman package and this fork has no package,
+    so nothing ever copied them to `/etc`. A fresh install came up with
+    **no swap device at all** and stock reclaim tuning while every
+    document said otherwise. `install/config/memory-tuning.sh` now
+    installs them, and the i686 VM comes up with a 1.9 GB zram at
+    priority 100 and `vm.swappiness=150`.
+
+### The pipewire decision, reversed
+
+`-DSERVICE_PIPEWIRE=OFF` is gone. archlinux32 still ships pipewire
+0.3.65, and the runbook was right that Quickshell 0.3.1 does not compile
+against it, but the whole incompatibility is two symbols:
+
+- `src/services/pipewire/core.cpp` initialises `.bound_props = nullptr`
+  in a `pw_core_events` designated initializer. 0.3.65 has no such
+  field. The line writes a null pointer and the listener announces
+  `PW_VERSION_CORE_EVENTS`, which is 0 there, so the server never emits
+  that event. Deleting the line is a no-op at run time.
+- `src/services/pipewire/node.cpp` uses `SPA_KEY_NODE_DESCRIPTION`,
+  absent from 0.3.65's `spa/node/keys.h`. `PW_KEY_NODE_DESCRIPTION` is
+  the identical string `"node.description"`.
+
+Two `sed` lines in the runbook, and `-DSERVICE_PIPEWIRE=ON` builds
+clean. `ldd -r /usr/bin/quickshell` reports no undefined symbol and the
+binary links `libpipewire-0.3.so.0`. So the four QML files that import
+`Quickshell.Services.Pipewire` have their module, and neither the audio
+panel, the volume OSD nor the media widgets are structurally missing on
+32-bit any more. What is **not** yet proven is the service talking to a
+0.3.65 daemon: the measurement bench had no pipewire running, so it only
+showed the service loading and failing to connect. That is the next
+thing a hardware report should say.
+
+`-DCRASH_HANDLER=OFF` stays: `cpptrace` is absent from archlinux32
+outright, and there is no two-line version of that.
+
+One more recipe note: the i686 build was configured with
+`-DCMAKE_INSTALL_PREFIX=/usr`, so the QML modules land in
+`/usr/lib/qt6/qml` beside archlinux32's own Qt. The x86_64 runbook
+leaves the prefix at cmake's `/usr/local` default and works, so this is
+the tested layout rather than a proven requirement.
+
+**Still never run on real hardware.** Every figure above is a QEMU VM
+with an emulated framebuffer. The MacBook has a GMA 950 and a slower
+Core Duo, so expect the timings to differ even where the megabytes do
+not.
 
 ## Validated (cloud bench: i686 chroot + QEMU with IA32 OVMF firmware)
 

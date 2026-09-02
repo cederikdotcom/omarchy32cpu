@@ -16,7 +16,7 @@ That is the target experience: Hyprland on the pixman (CPU) renderer, the Quicks
 
 Until now this fork substituted sway for Hyprland, because Hyprland needs GLES 3.0 and the target has no GPU. That reason is gone: this fork's [Hyprland](https://github.com/cederikdotcom/Hyprland/tree/pixman-renderer) and [aquamarine](https://github.com/cederikdotcom/aquamarine/tree/cpu-backend) branches add a pixman (CPU) renderer, and it composites headless, nested, and on a real DRM display in the i686 VM at 0.05 % idle CPU. So sway is deleted and the upstream Hyprland session is back.
 
-**"What works today" below was proven on the sway session.** On **x86_64 it has been proven again on Hyprland**, on 2026-08-31, and a third time with the real Quickshell desktop on 2026-09-01: a VM installed from this tree boots, greetd starts the session itself, `hyprctl systeminfo` says `Renderer: pixman (software)`, and the Quickshell bar, the Omarchy menu on a real `Super+Space`, notifications and theme switching all work with Qt on its software scenegraph. **On i686 none of it has been re-proven yet**, and none of it on hardware. So on the MacBook path, treat the list as what the stack did rather than what it does, and a report that one of those items no longer works is especially useful.
+**"What works today" below was proven on the sway session.** On **x86_64 it has been proven again on Hyprland**, on 2026-08-31, and a third time with the real Quickshell desktop on 2026-09-01: a VM installed from this tree boots, greetd starts the session itself, `hyprctl systeminfo` says `Renderer: pixman (software)`, and the Quickshell bar, the Omarchy menu on a real `Super+Space`, notifications and theme switching all work with Qt on its software scenegraph. **On i686 the desktop itself is proven again as of 2026-09-02** - the bar, the tray, the clock and the theme wallpaper on the pixman compositor at 1280x800 on the VM's DRM display, screenshot in [`docs/pixman-renderer/i686-quickshell.png`](docs/pixman-renderer/i686-quickshell.png) - but **the greetd login into it is not**: the compositor still aborts on heap corruption during its first frames often enough to leave you at the greeter. Bring it up by hand and retry; the runbook's troubleshooting section has the backtrace. Nothing on i686 has been proven on hardware. So on the MacBook path, treat the list as what the stack did rather than what it does, and a report that one of those items no longer works is especially useful.
 
 The renderer needs two environment variables, both set by `omarchy-hyprland-launch`: `HYPRLAND_RENDERER=pixman` picks the software renderer and `AQ_FORCE_ALLOCATOR=dumb` makes aquamarine allocate DRM dumb buffers. A stock Hyprland ignores both and then dies on the missing GLES 3.0, so the Hyprland and aquamarine binaries have to come from the fork build.
 
@@ -52,10 +52,12 @@ QSG_INFO=1 quickshell -p /usr/share/omarchy/shell 2>&1 | grep -i backend
 `omarchy-hyprland-launch` sets the variable for the whole session, so you
 only need this when something looks suspicious.
 
-Two things are switched off on i686 and are not bugs: **audio**
-(`omarchy.audio` has no source, because archlinux32's pipewire 0.3.65 is
-older than the API Quickshell's audio service needs) and the crash
-handler. Both are noted in the runbook.
+One thing is switched off on i686 and is not a bug: the **crash
+handler**, because `cpptrace` is absent from archlinux32. Audio used to
+be on this list and no longer is: Quickshell's pipewire service builds
+against archlinux32's pipewire 0.3.65 after a two-line patch that the
+runbook gives you. Whether it works against that old a daemon is
+unverified, and a report either way is useful.
 
 Known cosmetic gaps on **both** arches: four `MultiEffect` uses cannot
 run without shaders - tray icon colorization, the lock screen's blurred
@@ -82,15 +84,29 @@ other, so there is nothing accumulating.
 Against 96 MB for the shim stack it replaced, and that stack also had
 no lock screen, idle daemon or notification server.
 
+**On i686 in 2 GB it is cheaper, and it fits.** Measured 2026-09-02 in
+the i686 VM held at 2048 MB, at 1280x800: the desktop idles at 489 MB of
+system memory with 1466 MB left, the shell is 210 MB of that on the
+default wallpaper, the compositor 61 MB, a foot terminal 16 MB. The
+fixed part of the shell is about 135 MB on 32-bit rather than 190 MB on
+64-bit, so the model is `RSS ~= 135 MB + the decoded wallpaper`. A
+1.3 GB workload, browser-sized, ran on top of the idle desktop with
+260 MB free and never touched zram. The full series is in
+[`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md).
+
+What is **not** settled on i686 is stability, not size: the compositor
+still aborts on heap corruption during the first frames often enough to
+break a greetd login. See the runbook's troubleshooting section.
+
 Worth knowing before you blame the software scenegraph for any of
 this: the same shell in the same VM with `QT_QUICK_BACKEND` unset,
 taking Qt's default path through llvmpipe, sits at 698 MB. CPU
 rendering is not what costs the memory here, it is what saves it.
 
-**Still unmeasured on i686 and on real hardware**, and a hardware
-report carrying these numbers is worth more than any further VM work.
-If RAM is tight on a 2 GB machine, the lever is the wallpaper, not the
-plugin set.
+**Now measured on i686 too, and still never on real hardware.** A
+hardware report carrying these numbers is worth more than any further VM
+work. If RAM is tight on a 2 GB machine, the lever is the wallpaper, not
+the plugin set.
 
 ## What works today
 
