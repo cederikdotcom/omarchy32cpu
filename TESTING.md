@@ -42,10 +42,15 @@ compiling on a modern machine.
 components, `cmake` and `meson` from pip and a patch to
 wayland-protocols, which is a day of compiling on a Core Duo and not a
 sensible thing to ask of anyone at a MacBook. So the whole stack is
-published as one i686 tarball on the releases page and step 7 of
+published as one i686 tarball,
+`omarchy32cpu-stack-i686-20260902.tar.zst` on
+[release `i686-20260902`](https://github.com/cederikdotcom/omarchy32cpu/releases/tag/i686-20260902),
+and step 7 of
 [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md)
-extracts it. The recipe is still in that runbook, at the end, for anyone
-who wants to rebuild it.
+extracts it. That release also carries the two override packages, and it
+supersedes `overrides-i686-20260831` - take the new one; the old one's
+`neatvnc-0.8.1-3` cannot be installed at all. The build recipe is still
+in that runbook, at the end, for anyone who wants to rebuild it.
 
 If you are checking whether the CPU path is really being taken, this is
 the trap to know about: the variable is `QT_QUICK_BACKEND=software`.
@@ -245,7 +250,7 @@ If the desktop comes up at all but you are working over a network, `omarchy-remo
 ## Install paths
 
 - **x86_64** (VMs, cloud instances, thin clients, ordinary old laptops): [`docs/runbooks/install-x86_64.md`](docs/runbooks/install-x86_64.md). This is the low-friction path and the one most testers want. No override packages, ordinary UEFI.
-- **i686 on the 2006 MacBook A1181**: [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md). Harder: archlinux32, two override packages, 32-bit EFI.
+- **i686 on the 2006 MacBook A1181**: [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md). Harder: archlinux32, 32-bit EFI, and three prebuilt downloads from [release `i686-20260902`](https://github.com/cederikdotcom/omarchy32cpu/releases/tag/i686-20260902) - the desktop stack tarball and two override packages. Get them before you start; the target has no browser.
 
 ## How to report
 

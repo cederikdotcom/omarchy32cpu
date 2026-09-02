@@ -549,6 +549,34 @@ with an emulated framebuffer. The MacBook has a GMA 950 and a slower
 Core Duo, so expect the timings to differ even where the megabytes do
 not.
 
+### The i686 artifacts are published (2026-09-02)
+
+Everything the A1181 runbook downloads now exists, on one release:
+https://github.com/cederikdotcom/omarchy32cpu/releases/tag/i686-20260902
+
+| Asset | | |
+|---|---|---|
+| `omarchy32cpu-stack-i686-20260902.tar.zst` (+ `.sha256`) | 57 MB | **mandatory** |
+| `fontconfig-2.18.3-2-i686.pkg.tar.zst` | 246 kB | **mandatory** |
+| `neatvnc-0.8.1-4-i686.pkg.tar.zst` (+ `.sha256`) | 68 kB | optional, VNC only |
+
+The stack tarball is the exact tree the 2026-09-02 rehearsal installed
+and every figure above was measured on: this fork's Hyprland
+(`pixman-renderer` 63417a30) and aquamarine (`cpu-backend` 60a765d)
+under `/usr/local`, Quickshell 0.3.1 (`1a4716c`) built against
+archlinux32's Qt 6.7.2 under `/usr`, libinput 1.29 shadowing the repo's
+1.27, and the eleven other libraries archlinux32 has missing or too old.
+It is a tree and not a set of pacman packages because it is not a
+distribution, it is the output of a seventeen-component build that has
+no PKGBUILDs; `/etc/ld.so.conf.d/00-usrlocal.conf` rides along with it
+and `ldconfig` has to run after extraction.
+
+`overrides-i686-20260831` is superseded and marked so. Its `fontconfig`
+is the same file byte for byte, but its `neatvnc-0.8.1-3` cannot be
+installed at all - built without `provides=(libneatvnc.so)`, so pacman
+refuses it against wayvnc's dependency - and it never carried the stack
+tarball. It is kept only so old links do not 404.
+
 ## Validated (cloud bench: i686 chroot + QEMU with IA32 OVMF firmware)
 
 - `omarchy-apply-system --install-user cederik --first-install` runs
@@ -699,21 +727,12 @@ i686 install too.
 - **Fork package repo does not exist yet.** The two overrides -
   fontconfig 2:2.18.3 (mandatory: the desktop's text stack will not
   start without it) and
-  neatvnc 0.8.1 (needed by wayvnc remote view) - are now published as
+  neatvnc 0.8.1 (needed by wayvnc remote view) - are published as
   GitHub release assets and installed with `pacman -U` per the runbook:
-  https://github.com/cederikdotcom/omarchy32cpu/releases/tag/overrides-i686-20260831
+  https://github.com/cederikdotcom/omarchy32cpu/releases/tag/i686-20260902
   That is a stopgap, not a repo. Future i686 rebuilds (mbpfan,
   isight-firmware-tools, drift fixes) still want a real hosted pacman
   repo wired into default/pacman/*.conf.
-- **Three release assets have to be uploaded before the A1181 runbook
-  works as written.** It now installs the compositor and the shell from
-  a prebuilt i686 tarball instead of a build recipe, and it takes a
-  rebuilt neatvnc. Until these are on the
-  `overrides-i686-20260831` release, its download URLs 404:
-  `omarchy32cpu-stack-i686-20260902.tar.zst` (+ `.sha256`) and
-  `neatvnc-0.8.1-4-i686.pkg.tar.zst` (+ `.sha256`). Both were built on
-  the bench in the 2026-09-02 rehearsal and are staged there under
-  `/opt/o32fresh/rel`.
 - **Two components are in no repo, and on x86_64 every tester still
   builds them.** This is the largest remaining install-friction item:
   1. **Hyprland + aquamarine** (this fork's branches), because the pixman

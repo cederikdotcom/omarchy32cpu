@@ -28,9 +28,9 @@ browser and archlinux32 carries none of them.
 | What | Where | Needed for |
 |---|---|---|
 | archlinux32 i686 ISO, 2024.07.10 or later | `mirror.archlinux32.org/archisos/` | the install medium |
-| `fontconfig-2.18.3-2-i686.pkg.tar.zst` | [overrides-i686-20260831](https://github.com/cederikdotcom/omarchy32cpu/releases/tag/overrides-i686-20260831) | **mandatory**, the text stack |
+| `fontconfig-2.18.3-2-i686.pkg.tar.zst` | [i686-20260902](https://github.com/cederikdotcom/omarchy32cpu/releases/tag/i686-20260902) | **mandatory**, the text stack |
+| `omarchy32cpu-stack-i686-20260902.tar.zst` (+ `.sha256`) | the same release | **mandatory**, the compositor and the shell |
 | `neatvnc-0.8.1-4-i686.pkg.tar.zst` | the same release | optional, `omarchy-remote-view` |
-| `omarchy32cpu-stack-i686-20260902.tar.zst` | the same release | **mandatory**, the compositor and the shell |
 | this repository | `git clone https://github.com/cederikdotcom/omarchy32cpu` | `/usr/share/omarchy` |
 
 The stack tarball is the compositor (this fork's Hyprland and aquamarine, with
@@ -41,10 +41,13 @@ because building it is not a step, it is a project: seventeen components,
 Duo that is a day of compiling. Build it yourself only if you have a reason to;
 see "Rebuilding the stack" at the end.
 
-**Take `neatvnc-0.8.1-4`, not `-3`.** The `-3` asset cannot be installed at
-all: it was built without `provides=(libneatvnc.so)`, so pacman refuses it with
-`installing neatvnc (0.8.1-3) breaks dependency 'libneatvnc.so=0-32' required
-by wayvnc`.
+**Take everything from `i686-20260902`.** The older
+`overrides-i686-20260831` release is superseded and still carries a
+`neatvnc-0.8.1-3` that cannot be installed at all: it was built without
+`provides=(libneatvnc.so)`, so pacman refuses it with `installing neatvnc
+(0.8.1-3) breaks dependency 'libneatvnc.so=0-32' required by wayvnc`. Its
+`fontconfig` is the same file as the new one, so a stale link is only fatal for
+neatvnc, and the stack tarball was never on it at all.
 
 ## Scope
 
@@ -183,8 +186,8 @@ Install these **after** the core list, never before. `fontconfig` is in
 
 ```bash
 arch-chroot /mnt bash -c 'cd /root &&
-  curl -fLO https://github.com/cederikdotcom/omarchy32cpu/releases/download/overrides-i686-20260831/fontconfig-2.18.3-2-i686.pkg.tar.zst &&
-  curl -fLO https://github.com/cederikdotcom/omarchy32cpu/releases/download/overrides-i686-20260831/neatvnc-0.8.1-4-i686.pkg.tar.zst'
+  curl -fLO https://github.com/cederikdotcom/omarchy32cpu/releases/download/i686-20260902/fontconfig-2.18.3-2-i686.pkg.tar.zst &&
+  curl -fLO https://github.com/cederikdotcom/omarchy32cpu/releases/download/i686-20260902/neatvnc-0.8.1-4-i686.pkg.tar.zst'
 arch-chroot /mnt pacman -U --noconfirm /root/fontconfig-2.18.3-2-i686.pkg.tar.zst
 arch-chroot /mnt pacman -U --noconfirm /root/neatvnc-0.8.1-4-i686.pkg.tar.zst
 arch-chroot /mnt pacman -Q fontconfig neatvnc      # want 2:2.18.3-2 and 0.8.1-4
@@ -222,8 +225,8 @@ archlinux32.
 
 ```bash
 arch-chroot /mnt bash -c 'cd /root &&
-  curl -fLO https://github.com/cederikdotcom/omarchy32cpu/releases/download/overrides-i686-20260831/omarchy32cpu-stack-i686-20260902.tar.zst &&
-  curl -fLO https://github.com/cederikdotcom/omarchy32cpu/releases/download/overrides-i686-20260831/omarchy32cpu-stack-i686-20260902.tar.zst.sha256 &&
+  curl -fLO https://github.com/cederikdotcom/omarchy32cpu/releases/download/i686-20260902/omarchy32cpu-stack-i686-20260902.tar.zst &&
+  curl -fLO https://github.com/cederikdotcom/omarchy32cpu/releases/download/i686-20260902/omarchy32cpu-stack-i686-20260902.tar.zst.sha256 &&
   sha256sum -c omarchy32cpu-stack-i686-20260902.tar.zst.sha256'
 tar -C /mnt --zstd -xf /mnt/root/omarchy32cpu-stack-i686-20260902.tar.zst
 arch-chroot /mnt ldconfig
