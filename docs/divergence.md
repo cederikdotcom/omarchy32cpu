@@ -42,13 +42,21 @@ python3 .github/divergence/report.py --base upstream/quattro --format table
 python3 .github/divergence/report.py --base upstream/quattro --format json
 ```
 
+**Before you commit**, add `--worktree`:
+
+```bash
+python3 .github/divergence/report.py --base upstream/quattro --worktree
+```
+
+A ref-to-ref comparison cannot see a path you have not committed yet, so without this a forgotten pathspec first surfaces in CI. `--worktree` diffs against the files on disk and folds in untracked files (honouring `.gitignore`), which is the commonest way a fork-only file goes unregistered. It exits 2 and names the path, exactly as the sync job would.
+
 `--issue-body <id>` renders the block that goes into that entry's issue; with `--existing-body <file>` it splices into the current body, replacing only what sits between the entry's markers and leaving everything a person wrote intact.
 
 The block carries no timestamp, so a run against an unchanged upstream renders byte-identically and the workflow skips the write.
 
 ## When you change something
 
-- Adding a fork-only file, or forking one upstream owns, means adding it to an entry's `pathspecs`. The sync job fails loudly if you do not, which is the point.
+- Adding a fork-only file, or forking one upstream owns, means adding it to an entry's `pathspecs`. Run the `--worktree` check above before committing; the sync job fails loudly if you do not, which is the point.
 - Closing a gap - upstream adopts a change, or the fork drops a substitute - means the pathspec stops matching. Move the entry to `resolved` and close its issue, rather than leaving a stale claim.
 - The weights move on every commit to the work branch, not only when upstream moves. That is why the report runs on every invocation of the sync workflow instead of only when we are behind.
 

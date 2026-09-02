@@ -107,15 +107,50 @@ def git(repo, *args):
 
 
 def read_numstat(args):
-    """Return the raw `git diff --numstat` text for base..head."""
+    """Return the raw `git diff --numstat` text for base..head.
+
+    Two-dot: the whole tree difference, not just our side of a merge base.
+    A fork's accounting question is "how far is the tree from upstream's",
+    which three-dot would understate after upstream is merged in.
+
+    With --worktree the head is omitted, so git diffs the base against the
+    files on disk. That is what makes the accounting checkable *before* a
+    commit: comparing two refs cannot see a path you have not committed yet,
+    so a forgotten pathspec would otherwise only surface in CI.
+    """
     if args.numstat:
         return Path(args.numstat).read_text()
     if not args.base:
         raise AccountingError("--base is required unless --numstat is given")
-    # Two-dot: the whole tree difference, not just our side of a merge base.
-    # A fork's accounting question is "how far is the tree from upstream's",
-    # which three-dot would understate after upstream is merged in.
+    if args.worktree:
+        # `git diff` reports tracked changes only, so on its own this would miss
+        # a brand-new file -- the commonest way to add fork-only code, and the
+        # exact case the pre-commit check exists for. Untracked files are
+        # measured separately and folded in.
+        tracked = git(args.repo, "diff", "--numstat", args.base, "--")
+        return tracked + untracked_numstat(args.repo)
     return git(args.repo, "diff", "--numstat", args.base, args.head, "--")
+
+
+def untracked_numstat(repo):
+    """numstat lines for files git does not track yet, honouring .gitignore.
+
+    Counted as pure additions, because that is what they are against any base.
+    Binary detection follows git's own heuristic closely enough for a weight:
+    a NUL byte early in the file means no line count, reported as "-" so it
+    lands in the binary column rather than inflating the churn.
+    """
+    listing = git(repo, "ls-files", "--others", "--exclude-standard", "-z")
+    lines = []
+    for name in listing.split("\0"):
+        if not name:
+            continue
+        blob = (Path(repo) / name).read_bytes()
+        if b"\0" in blob[:8000]:
+            lines.append(f"-\t-\t{name}")
+        else:
+            lines.append(f"{blob.count(b'\n') + (1 if blob and not blob.endswith(b'\n') else 0)}\t0\t{name}")
+    return "\n".join(lines) + ("\n" if lines else "")
 
 
 def parse_numstat(text):
@@ -418,6 +453,9 @@ def main(argv=None):
     parser.add_argument("--head", default="HEAD", help="work ref (default HEAD)")
     parser.add_argument("--numstat", default=None,
                         help="read git diff --numstat output from a file instead of running git")
+    parser.add_argument("--worktree", action="store_true",
+                        help="compare against the files on disk, including uncommitted changes, "
+                             "so a missing pathspec is caught before the commit rather than in CI")
     parser.add_argument("--base-label", default=None, help="label for the base ref in output")
     parser.add_argument("--head-label", default=None, help="label for the head ref in output")
     parser.add_argument("--format", choices=("markdown", "json", "table"), default="markdown")
@@ -440,13 +478,21 @@ def main(argv=None):
         return 2
 
     report = weigh(buckets, registry, entries)
+    if args.numstat:
+        head_sha = "n/a"
+    elif args.worktree:
+        # Deliberately not a SHA: the working tree is not a commit, and
+        # labelling it with HEAD's SHA in an issue body would be a lie.
+        head_sha = "uncommitted"
+    else:
+        head_sha = resolve_sha(repo, args.head)
     context = {
         "total_files": report["total_files"],
         "total_lines": report["total_lines"],
         "base_label": args.base_label or args.base or "upstream",
-        "head_label": args.head_label or args.head,
+        "head_label": args.head_label or ("working tree" if args.worktree else args.head),
         "base_sha": resolve_sha(repo, args.base) if not args.numstat else "n/a",
-        "head_sha": resolve_sha(repo, args.head) if not args.numstat else "n/a",
+        "head_sha": head_sha,
     }
 
     if args.issue_body:

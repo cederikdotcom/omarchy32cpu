@@ -23,7 +23,7 @@ Three documentation trees, split by genre and audience:
 
 This is a fork. Every path where it differs from upstream `omacom/omarchy` belongs to exactly one entry in [`.github/divergence/registry.json`](.github/divergence/registry.json), and each entry has a GitHub issue that the sync workflow keeps weighted and current. [`docs/divergence.md`](docs/divergence.md) covers the schema and the rules.
 
-Adding a fork-only file, or forking one upstream owns, means adding it to an entry's `pathspecs` in the same commit. The scheduled sync fails loudly on any path no entry claims, or that two entries claim, so unrecorded drift does not survive a day.
+Adding a fork-only file, or forking one upstream owns, means adding it to an entry's `pathspecs` in the same commit. Check it before committing with `python3 .github/divergence/report.py --base upstream/<default> --worktree`, which sees uncommitted and untracked files. The scheduled sync fails loudly on any path no entry claims, or that two entries claim, so unrecorded drift does not survive a day.
 
 # Style
 

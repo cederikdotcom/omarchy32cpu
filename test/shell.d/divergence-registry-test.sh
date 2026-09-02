@@ -185,6 +185,64 @@ python3 "$REPORT" --repo "$ROOT" --registry "$FIXTURES/registry.json" \
   fail "a pipe in an upstream path is escaped rather than forging a table column"
 pass "path text from upstream is escaped before it reaches a Markdown cell"
 
+# --- --worktree sees uncommitted work ------------------------------------
+
+# The whole point of the flag: comparing two refs cannot see a path that is not
+# committed yet, so without this a forgotten pathspec first surfaces in CI. Built
+# as a throwaway repo rather than by writing into this one, which is shared.
+scratch_repo="$test_tmp/scratch"
+mkdir -p "$scratch_repo"
+git -C "$scratch_repo" init -q
+git -C "$scratch_repo" config user.email test@example.com
+git -C "$scratch_repo" config user.name "divergence test"
+mkdir -p "$scratch_repo/alpha"
+printf 'base\n' >"$scratch_repo/alpha/one.sh"
+git -C "$scratch_repo" add -A
+git -C "$scratch_repo" commit -qm base
+base_sha=$(git -C "$scratch_repo" rev-parse HEAD)
+
+# An uncommitted file no entry claims.
+printf 'new\n' >"$scratch_repo/unclaimed.sh"
+
+set +e
+output=$(python3 "$REPORT" --repo "$scratch_repo" --registry "$FIXTURES/registry.json" \
+  --base "$base_sha" --worktree --format json 2>&1)
+status=$?
+set -e
+((status == 2)) || fail "--worktree fails on an uncommitted path no entry claims" "exit $status"
+grep -q 'unclaimed.sh' <<<"$output" || fail "the failure names the uncommitted path" "$output"
+
+# The same tree, compared between refs, cannot see it at all.
+python3 "$REPORT" --repo "$scratch_repo" --registry "$FIXTURES/registry.json" \
+  --base "$base_sha" --head HEAD --format json >/dev/null ||
+  fail "a ref-to-ref comparison is blind to the uncommitted path, as expected"
+pass "--worktree catches an unregistered path before the commit, where a ref comparison cannot"
+
+# Claim it, and the same run passes and counts it.
+python3 - "$FIXTURES/registry.json" "$test_tmp/claimed.json" <<'PYTHON'
+import json, sys
+
+registry = json.load(open(sys.argv[1]))
+registry["groups"][0]["pathspecs"].append("unclaimed.sh")
+json.dump(registry, open(sys.argv[2], "w"))
+PYTHON
+
+python3 "$REPORT" --repo "$scratch_repo" --registry "$test_tmp/claimed.json" \
+  --base "$base_sha" --worktree --format json >"$test_tmp/worktree.json" ||
+  fail "--worktree passes once the path is claimed"
+
+python3 - "$test_tmp/worktree.json" <<'PYTHON' || fail "--worktree counts the uncommitted path and labels the head honestly"
+import json, sys
+
+data = json.load(open(sys.argv[1]))
+groups = {g["id"]: g for g in data["report"]["groups"]}
+assert "unclaimed.sh" in groups["alpha"]["paths"], groups["alpha"]["paths"]
+# The working tree is not a commit, so it must not be labelled with one.
+assert data["context"]["head_sha"] == "uncommitted", data["context"]["head_sha"]
+assert data["context"]["head_label"] == "working tree", data["context"]["head_label"]
+PYTHON
+pass "--worktree counts uncommitted paths and never labels the tree with a commit sha"
+
 # --- the committed registry ----------------------------------------------
 
 python3 - "$REGISTRY" <<'PYTHON' || fail "the committed registry is well formed"
