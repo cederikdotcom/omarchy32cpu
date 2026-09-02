@@ -2,8 +2,43 @@ name: upstream sync check
 
 # Keeps this fork aware of its upstream without ever auto-merging into the
 # work branch: mirrors upstream to a tracking branch, then reports whether
-# our branch still merges cleanly. Divergence is surfaced as an issue, not
+# our branch still merges cleanly. Divergence is surfaced as issues, not
 # silently resolved.
+#
+# It also maintains the divergence registry (.github/divergence/registry.json):
+# every path where the work branch differs from upstream is assigned to exactly
+# one semantic entry, each entry is weighed against the whole diff, and each
+# linked issue gets its numbers refreshed. That runs on every invocation, not
+# only when upstream has moved -- our own commits change the weights too.
+#
+# SECURITY. This job holds a GITHUB_TOKEN with `contents: write` and
+# `issues: write` for this repository, and it reads content from a third-party
+# repository (the upstream fork parent). Two rules follow, and both matter:
+#
+#  1. Only `schedule` and `workflow_dispatch` may trigger it. Both run code
+#     from this repository's own branches with a token scoped to this
+#     repository. Do NOT add `pull_request_target` or `issue_comment`: those
+#     run on events an outsider controls while still handing out a writable
+#     token, which is how a fork PR would reach the issue and branch writes
+#     below.
+#  2. Upstream content is data, never code. This job never executes anything
+#     fetched from upstream. It reads `git diff --numstat` output and paths;
+#     report.py escapes those before they reach a Markdown table, and every
+#     issue body is passed to `gh` through --body-file rather than an
+#     interpolated argument, so a crafted upstream filename cannot forge table
+#     rows or reach a shell.
+#
+# Known limitations, stated rather than implied:
+#  - `contents: write` is repository-wide. The push below is refspec-limited to
+#    refs/heads/upstream-tracking, but the token is not: any step in this job
+#    could write elsewhere. Review changes to this file as privileged.
+#  - The issue writes rewrite everything between the divergence markers on
+#    every run. Human text outside the markers is preserved; human text placed
+#    inside them will be overwritten.
+#  - Issue writes are best effort. A fork's token, or a repository with issues
+#    disabled, can refuse them; the job warns and the job summary carries the
+#    full report either way. Accounting failures are NOT best effort - an
+#    unclassified or doubly-claimed path fails the job.
 
 on:
   schedule:
@@ -16,7 +51,11 @@ permissions:
 
 env:
   UPSTREAM: omacom/omarchy
-  WORK_BRANCH: main
+  # The branch this run reports on: the ref the workflow was invoked against.
+  # This keeps the registry and the tree it describes on the same commit --
+  # reading the registry from one branch while diffing another is how the
+  # accounting would go quietly wrong.
+  WORK_BRANCH: ${{ github.ref_name }}
 
 jobs:
   sync:
@@ -41,13 +80,51 @@ jobs:
           echo "behind=$(git rev-list --count HEAD..upstream/$default)" >> "$GITHUB_OUTPUT"
           echo "ahead=$(git rev-list --count upstream/$default..HEAD)" >> "$GITHUB_OUTPUT"
 
+      # Runs unconditionally, including at zero behind. The registry describes
+      # the distance between two trees, and our own commits move it.
+      - name: Measure divergence against the registry
+        id: divergence
+        env:
+          UP_DEFAULT: ${{ steps.mirror.outputs.default }}
+        run: |
+          set -uo pipefail
+          if ! python3 .github/divergence/report.py \
+                 --base "upstream/$UP_DEFAULT" --base-label "$UPSTREAM ($UP_DEFAULT)" \
+                 --head HEAD --head-label "$WORK_BRANCH" \
+                 --format markdown --out /tmp/divergence.md 2>/tmp/divergence.err; then
+            {
+              echo "## Divergence registry: accounting failed"
+              echo
+              echo "\`.github/divergence/registry.json\` cannot account for the current diff."
+              echo "Nothing below is trustworthy until this is fixed: a path that no entry"
+              echo "claims, or that two entries claim, would silently distort every weight."
+              echo
+              echo '```'
+              cat /tmp/divergence.err
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            sed 's/^/::error::divergence registry: /' /tmp/divergence.err
+            exit 1
+          fi
+          python3 .github/divergence/report.py \
+            --base "upstream/$UP_DEFAULT" --base-label "$UPSTREAM ($UP_DEFAULT)" \
+            --head HEAD --head-label "$WORK_BRANCH" \
+            --format table --out /tmp/divergence-table.md
+          python3 .github/divergence/report.py \
+            --base "upstream/$UP_DEFAULT" --base-label "$UPSTREAM ($UP_DEFAULT)" \
+            --head HEAD --head-label "$WORK_BRANCH" \
+            --format json --out /tmp/divergence.json
+
+          # "<entry id> <issue number or empty>" per line, for the refresh step.
+          python3 -c 'import json; print("\n".join("%s %s" % (g["id"], g.get("issue") or "") for g in json.load(open(".github/divergence/registry.json"))["groups"]))' \
+            > /tmp/divergence-issues.txt
+
       - name: Test-merge upstream into the work branch
         id: testmerge
         run: |
           set -uo pipefail
           git config user.email "actions@github.com"
           git config user.name "upstream sync"
-          git checkout -q "$WORK_BRANCH" 2>/dev/null || git checkout -q -b "$WORK_BRANCH" origin/"$WORK_BRANCH"
           if git merge --no-commit --no-ff "upstream/${{ steps.mirror.outputs.default }}" >/tmp/merge.log 2>&1; then
             git merge --abort 2>/dev/null || true
             echo "clean=true" >> "$GITHUB_OUTPUT"
@@ -56,9 +133,12 @@ jobs:
             git diff --name-only --diff-filter=U | head -40 > /tmp/conflicts.txt || true
             git merge --abort 2>/dev/null || true
           fi
+          # Nothing is ever committed or pushed to the work branch here.
+          git checkout -q -- . 2>/dev/null || true
 
-      - name: Report divergence
-        if: steps.mirror.outputs.behind != '0'
+      # The tracked upstream issue: one issue, retitled and rewritten each run,
+      # so it reflects the current state rather than accumulating stale reports.
+      - name: Report sync status
         env:
           GH_TOKEN: ${{ github.token }}
           BEHIND: ${{ steps.mirror.outputs.behind }}
@@ -67,7 +147,11 @@ jobs:
           UP_DEFAULT: ${{ steps.mirror.outputs.default }}
         run: |
           set -euo pipefail
-          title="upstream sync: $WORK_BRANCH is $BEHIND commits behind $UPSTREAM"
+          if [ "$BEHIND" = "0" ]; then
+            title="upstream sync: $WORK_BRANCH is up to date with $UPSTREAM"
+          else
+            title="upstream sync: $WORK_BRANCH is $BEHIND commits behind $UPSTREAM"
+          fi
           {
             echo "Automated check on $(date -u +%Y-%m-%d)."
             echo
@@ -79,16 +163,28 @@ jobs:
               echo "Conflicting paths:"
               echo
               sed 's/^/- /' /tmp/conflicts.txt
+            elif [ "$BEHIND" = "0" ]; then
+              echo "Nothing to merge."
             else
               echo "Upstream merges cleanly. Nothing urgent - merge when convenient."
             fi
+            echo
+            echo "### Divergence by entry"
+            echo
+            cat /tmp/divergence-table.md
+            echo
+            echo "Each entry is tracked in its own issue; see \`.github/divergence/registry.json\`."
             echo
             echo "Nothing was merged automatically. This issue updates itself on each run."
           } > /tmp/body.md
           # The run summary is the reliable channel: a fork's GITHUB_TOKEN
           # cannot always open issues. The issue is best-effort on top.
-          echo "## $title" >> "$GITHUB_STEP_SUMMARY"
-          cat /tmp/body.md >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## $title"
+            cat /tmp/body.md
+            echo
+            cat /tmp/divergence.md
+          } >> "$GITHUB_STEP_SUMMARY"
           if [ "$CLEAN" = "false" ]; then
             echo "::warning::$title - upstream no longer merges cleanly, see the job summary"
           fi
@@ -97,4 +193,60 @@ jobs:
             gh issue edit "$existing" --title "$title" --body-file /tmp/body.md 2>/dev/null || echo "note: could not update issue #$existing (fork token restriction)"
           else
             gh issue create --title "$title" --body-file /tmp/body.md 2>/dev/null || echo "note: could not open an issue (fork token restriction); the job summary carries the report"
+          fi
+
+      # One issue per semantic divergence. Each is rewritten only between its
+      # markers, and only when the rendered block actually changed -- the block
+      # carries no timestamp, so a run over an unchanged upstream is a no-op.
+      - name: Refresh the divergence issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UP_DEFAULT: ${{ steps.mirror.outputs.default }}
+        run: |
+          set -uo pipefail
+          failures=()
+          updated=()
+          unchanged=()
+          missing=()
+
+          while read -r id issue; do
+            if [ -z "$issue" ] || [ "$issue" = "null" ]; then
+              missing+=("$id")
+              continue
+            fi
+            if ! gh issue view "$issue" --json body -q .body > "/tmp/issue-$issue.md" 2>/dev/null; then
+              failures+=("$id -> #$issue (could not read)")
+              continue
+            fi
+            python3 .github/divergence/report.py \
+              --base "upstream/$UP_DEFAULT" --base-label "$UPSTREAM ($UP_DEFAULT)" \
+              --head HEAD --head-label "$WORK_BRANCH" \
+              --issue-body "$id" --existing-body "/tmp/issue-$issue.md" \
+              --out "/tmp/issue-$issue.new.md" || {
+                failures+=("$id -> #$issue (could not render)")
+                continue
+              }
+            if cmp -s "/tmp/issue-$issue.md" "/tmp/issue-$issue.new.md"; then
+              unchanged+=("$id -> #$issue")
+            elif gh issue edit "$issue" --body-file "/tmp/issue-$issue.new.md" >/dev/null 2>&1; then
+              updated+=("$id -> #$issue")
+            else
+              failures+=("$id -> #$issue (could not write)")
+            fi
+          done < /tmp/divergence-issues.txt
+
+          {
+            echo "### Divergence issue refresh"
+            echo
+            printf -- "- updated: %s\n" "${updated[*]:-none}"
+            printf -- "- already current: %s\n" "${unchanged[*]:-none}"
+            printf -- "- no issue linked yet: %s\n" "${missing[*]:-none}"
+            printf -- "- could not write: %s\n" "${failures[*]:-none}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${#failures[@]}" -gt 0 ]; then
+            echo "::warning::${#failures[@]} divergence issue(s) could not be refreshed: ${failures[*]}"
+          fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::warning::${#missing[@]} divergence entr(ies) have no issue linked in the registry: ${missing[*]}"
           fi
