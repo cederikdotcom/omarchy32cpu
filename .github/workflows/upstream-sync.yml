@@ -35,6 +35,11 @@ name: upstream sync check
 #  - The issue writes rewrite everything between the divergence markers on
 #    every run. Human text outside the markers is preserved; human text placed
 #    inside them will be overwritten.
+#  - Every `gh` step pins GH_REPO to this repository. The mirror step adds an
+#    `upstream` remote and gh prefers it when inferring the repo, so without the
+#    pin the issue calls would be aimed at the upstream project rather than
+#    ours. They would fail on permissions, but a workflow should not be pointing
+#    writes at a repository it does not own in the first place.
 #  - Issue writes are best effort. A fork's token, or a repository with issues
 #    disabled, can refuse them; the job warns and the job summary carries the
 #    full report either way. Accounting failures are NOT best effort - an
@@ -141,6 +146,12 @@ jobs:
       - name: Report sync status
         env:
           GH_TOKEN: ${{ github.token }}
+          # gh infers the repository from the git remotes, and the mirror step
+          # above added an `upstream` remote that gh prefers. Without this pin
+          # every issue call below would resolve to the upstream repository:
+          # the writes would fail on permissions and be swallowed by the
+          # best-effort paths, so the issues would silently stop updating.
+          GH_REPO: ${{ github.repository }}
           BEHIND: ${{ steps.mirror.outputs.behind }}
           AHEAD: ${{ steps.mirror.outputs.ahead }}
           CLEAN: ${{ steps.testmerge.outputs.clean }}
@@ -201,6 +212,8 @@ jobs:
       - name: Refresh the divergence issues
         env:
           GH_TOKEN: ${{ github.token }}
+          # Same pin as above, for the same reason.
+          GH_REPO: ${{ github.repository }}
           UP_DEFAULT: ${{ steps.mirror.outputs.default }}
         run: |
           set -uo pipefail
