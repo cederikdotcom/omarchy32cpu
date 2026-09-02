@@ -317,9 +317,124 @@ not - that is qtwayland probing for an EGL platform integration at
 startup, not the scenegraph. The RSS settles the question either way:
 llvmpipe rendering costs three times this.
 
+## The install rehearsal, and what the runbook was missing (2026-09-02)
+
+A fresh i686 image was built from nothing by following
+`docs/runbooks/a1181-install.md` literally, in order, and booted under
+IA32 OVMF at 2048 MB. The install works. Nine things in the runbook did
+not, and all nine are now fixed there:
+
+1. **`pacman -U <https url>` cannot install the override packages.** On a
+   target with a populated keyring, pacman fetches a detached `.sig`
+   beside every remote package and GitHub answers 404, so the
+   transaction fails with `error: failed retrieving file
+   'fontconfig-2.18.3-2-i686.pkg.tar.zst.sig'` and nothing is installed.
+   The runbook's own command therefore left the machine without the
+   mandatory fontconfig override, and `ldd -r` on the compositor then
+   showed the `FcConfigSetDefaultSubstitute` undefined symbols the
+   override exists to prevent. Download the file, install the file:
+   `LocalFileSigLevel = Optional` lets a local package through.
+2. **The published `neatvnc-0.8.1-3` asset cannot be installed at all.**
+   It was built without `provides=(libneatvnc.so)`, so pacman refuses it
+   with `installing neatvnc (0.8.1-3) breaks dependency
+   'libneatvnc.so=0-32' required by wayvnc`. The runbook documented the
+   `provides` line as a note for anyone rebuilding, but the asset never
+   had it. Rebuilt as `0.8.1-4`; with that one, `ldd -r /usr/bin/wayvnc`
+   reports zero undefined symbols.
+3. **`libxml2-legacy` was named nowhere.** Both `Hyprland` and
+   `libhyprgraphics` link `libxml2.so.2`, and the repo's libxml2 is 2.15
+   with soname `.16`. Without the legacy package the compositor does not
+   start, and every pacman transaction ends with
+   `gtk-query-immodules-3.0: libxml2.so.2: cannot open shared object
+   file`. Fourth-and-a-half bug of the fontconfig / neatvnc / icu75
+   drift class, and it had been hiding behind waybar, which used to be
+   the only thing anyone noticed linking it.
+4. **`libzip` was missing from the core package list.** The compositor
+   links `libzip.so.5`. Added.
+5. **`mkinitcpio` fails during `pacstrap`,** with `==> ERROR: file not
+   found: '/etc/vconsole.conf'`. The runbook knew vconsole.conf had to
+   exist before mkinitcpio ran; what it did not say is that pacstrap
+   runs mkinitcpio itself, before there is an `/etc` to write into, so
+   the image has to be rebuilt with `mkinitcpio -P` after the system
+   files are in place.
+6. **The initramfs MODULES line was never specified.** `MODULES=(ahci
+   sd_mod i915)` on the MacBook, `bochs` in a VM. The runbook now says
+   both, and what the `kms` hook costs.
+7. **`omarchy-refresh-grub` produced no bootloader.** It chose its
+   target from `uname -m`, which reports the installer's architecture
+   and not the target's, so an i686 root built from a 64-bit installer
+   got `grub-install: error:
+   /usr/lib/grub/x86_64-efi/modinfo.sh doesn't exist` and no
+   `BOOTIA32.EFI`. `install/post-install/pacman.sh` had the same bug in
+   the same place and silently skipped installing the archlinux32
+   pacman.conf. Both now read the target rather than the kernel.
+8. **Step 6 quietly overwrites `/etc/pacman.conf`.**
+   `install/post-install/pacman.sh` copies the fork's own config over
+   it, so any hand edit made earlier in the install is lost. The runbook
+   says so now, and the fork's config carries the `IgnorePkg` pin that
+   used to be an instruction.
+9. **"rules cannot be added from inside a chroot" was wrong.**
+   `ufw allow 22/tcp` in the chroot prints `ERROR: problem running` and
+   exits 1, because it cannot load the rule into the kernel, but it does
+   write the rule to `/etc/ufw/user.rules` and the rule is live after
+   the reboot. Check the file, not the exit code.
+
+Two further changes came out of it. `install/login/greetd.sh` now runs
+both sessions through `systemd-cat -t omarchy-session`, because
+Hyprland's runtime log is empty by default and greetd sends the
+session's own output nowhere: a compositor that died at login left no
+evidence whatsoever, which is a poor thing to hand someone who is about
+to install this at a machine with no way to ask questions. And the
+compositor, the shell and their fifteen unpackaged dependencies are now
+published as one prebuilt i686 tarball
+(`omarchy32cpu-stack-i686-<date>.tar.zst`, 56 MB) rather than a build
+recipe. The recipe was sixteen components, pip cmake and meson, and a
+wayland-protocols patch; on a 2006 Core Duo that is a day of compiling
+before the first login attempt. The recipe stays in the runbook for
+anyone who wants it.
+
+### The i686 login crash, bisected to one config line (2026-09-02)
+
+**greetd now puts you on the i686 desktop.** Screenshot, taken from the
+QEMU display of a fresh install built by the runbook and started by
+greetd with no hand-holding: `docs/pixman-renderer/i686-greetd-desktop.png`
+- the bar, the tray, the clock, the theme wallpaper, foot on
+`Super+Return` and the Omarchy menu on `Super+Space`, at 1280x800 in
+2048 MB, with `Renderer: pixman (software)` on `Backend: drm`, zero
+failed units and 491 MB in use.
+
+Before this, the same install crashed on every login. The bisect ran one
+config variant at a time, hand-starting the same binary against the same
+`/dev/dri/card0` through seatd on a quiet machine:
+
+| config | survived |
+|---|---|
+| minimal `hyprland-flat.conf` | 12 / 12 |
+| the fork's `~/.config/hypr/hyprland.lua` | 0 / 5 |
+| `helpers` + `envs` + `looknfeel` | 6 / 6 |
+| the same plus `default.hypr.input` | 0 / 6 |
+| the same plus `input.lua`'s keyboard block | 0 / 4 |
+| the same plus `numlock_by_default = true` alone | 0 / 4 |
+| the whole fork config with `numlock_by_default = false` | 4 / 5 |
+
+`input:numlock_by_default` makes Hyprland build a second xkb state for
+every keyboard it opens, and on i686 that path corrupts the heap. glibc
+then aborts at the next large allocation, which is nearly always a
+pixman region `realloc` on the DRM page-flip path, which is why every
+backtrace anyone took pointed at the renderer and none of them pointed
+here. `default/hypr/input.lua` now ships it off. The cost is a keyboard
+that starts with numlock off, on a machine with no numpad.
+
+**The renderer bug is not fixed**, only kept out of the one path that
+reached it every time. The 3/4, 5/6 and 4/5 rows are the residue: about
+one start in five still dies, so an occasional login that lands on the
+greeter is expected and a second login gets you in. Fixing the renderer
+properly is still the next job, and the sites named below are still the
+places to look.
+
 ### What is still broken on i686
 
-**The session crashes on login, and this is the one thing to fix next.**
+**The session crashes on about one login in five.**
 Started by greetd, the compositor and the shell both come up and then
 Hyprland aborts with `malloc(): invalid size (unsorted)`. It is heap
 corruption, so glibc reports it at whatever allocates next and the site
@@ -357,11 +472,16 @@ formats (`DRM_FORMAT_RGB565`) get `stride = width * 2` in both
 `CPixmanTexture::allocate` and `CPixmanFramebuffer::internalAlloc`,
 which is not the 4-byte-aligned stride pixman requires for an odd width.
 
-Bringing the compositor and the shell up by hand works: the compositor
-survived on the second attempt and then ran for over an hour under the
-whole measurement series. That is how every number above was obtained.
+Ruled out on 2026-09-02 as well: greetd and the VT/DRM handover. The
+same binary hand-started against `/dev/dri/card0` through seatd crashes
+and survives at the same rates as a greetd login does; what changes the
+rate is the config file, not who starts the compositor. A fourth site is
+therefore worth adding to the list, on the input side rather than the
+render side: whatever `numlock_by_default` makes Hyprland do to a
+keyboard's xkb state is enough to corrupt the heap on its own, on a
+compositor that has not yet drawn a client.
 
-### Two i686 bugs fixed on the way
+### Three i686 bugs fixed on the way
 
 22. **The cursor theme's gsettings write killed the compositor.**
     Hyprland's `cursor:sync_gsettings_theme` writes the cursor theme
@@ -382,6 +502,11 @@ whole measurement series. That is how every number above was obtained.
     document said otherwise. `install/config/memory-tuning.sh` now
     installs them, and the i686 VM comes up with a 1.9 GB zram at
     priority 100 and `vm.swappiness=150`.
+24. **`input:numlock_by_default` killed the compositor at every login.**
+    See the bisect above. `default/hypr/input.lua` now ships it off.
+    Same shape as bug 22: an upstream default that is harmless on
+    x86_64 and fatal on 32-bit, hiding behind a backtrace that names
+    the renderer.
 
 ### The pipewire decision, reversed
 
@@ -578,19 +703,31 @@ i686 install too.
   That is a stopgap, not a repo. Future i686 rebuilds (mbpfan,
   isight-firmware-tools, drift fixes) still want a real hosted pacman
   repo wired into default/pacman/*.conf.
-- **Two components cannot be packaged at all yet, and must be built from
-  source by every tester.** This is the single biggest install-friction
-  item in the fork:
+- **Three release assets have to be uploaded before the A1181 runbook
+  works as written.** It now installs the compositor and the shell from
+  a prebuilt i686 tarball instead of a build recipe, and it takes a
+  rebuilt neatvnc. Until these are on the
+  `overrides-i686-20260831` release, its download URLs 404:
+  `omarchy32cpu-stack-i686-20260902.tar.zst` (+ `.sha256`) and
+  `neatvnc-0.8.1-4-i686.pkg.tar.zst` (+ `.sha256`). Both were built on
+  the bench in the 2026-09-02 rehearsal and are staged there under
+  `/opt/o32fresh/rel`.
+- **Two components are in no repo, and on x86_64 every tester still
+  builds them.** This is the largest remaining install-friction item:
   1. **Hyprland + aquamarine** (this fork's branches), because the pixman
      renderer exists nowhere else.
   2. **quickshell** 0.3.1, because it is in neither official Arch nor
      archlinux32 - upstream gets it from pkgs.omarchy.org, which serves
-     x86_64 only. Exact build commands per arch are in
-     `docs/runbooks/install-x86_64.md` (step 10) and
-     `docs/runbooks/a1181-install.md` (step 5c). Note that Quickshell
-     links private Qt APIs and has to be rebuilt on every `qt6-base` /
-     `qt6-declarative` upgrade, so a fork repo needs to rebuild it in
-     lockstep with Qt rather than merely host it once.
+     x86_64 only.
+
+  Build commands are in `docs/runbooks/install-x86_64.md`, steps 9 and
+  10. i686 no longer builds either: step 7 of
+  `docs/runbooks/a1181-install.md` installs the prebuilt stack tarball,
+  and the recipe moved to an appendix there. Note that Quickshell links
+  private Qt APIs and has to be rebuilt on every `qt6-base` /
+  `qt6-declarative` upgrade, so a fork repo needs to rebuild it in
+  lockstep with Qt rather than merely host it once. Until then the
+  fork's `pacman.conf` pins those two, and `libinput`.
 - **No install ISO.** The install path is: boot the archlinux32 ISO,
   partition, pacstrap the core list, put the repo at /usr/share/omarchy,
   create the user, run omarchy-apply-system. The ISO-layer duties are

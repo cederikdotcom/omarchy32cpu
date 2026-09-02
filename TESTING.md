@@ -16,7 +16,11 @@ That is the target experience: Hyprland on the pixman (CPU) renderer, the Quicks
 
 Until now this fork substituted sway for Hyprland, because Hyprland needs GLES 3.0 and the target has no GPU. That reason is gone: this fork's [Hyprland](https://github.com/cederikdotcom/Hyprland/tree/pixman-renderer) and [aquamarine](https://github.com/cederikdotcom/aquamarine/tree/cpu-backend) branches add a pixman (CPU) renderer, and it composites headless, nested, and on a real DRM display in the i686 VM at 0.05 % idle CPU. So sway is deleted and the upstream Hyprland session is back.
 
-**"What works today" below was proven on the sway session.** On **x86_64 it has been proven again on Hyprland**, on 2026-08-31, and a third time with the real Quickshell desktop on 2026-09-01: a VM installed from this tree boots, greetd starts the session itself, `hyprctl systeminfo` says `Renderer: pixman (software)`, and the Quickshell bar, the Omarchy menu on a real `Super+Space`, notifications and theme switching all work with Qt on its software scenegraph. **On i686 the desktop itself is proven again as of 2026-09-02** - the bar, the tray, the clock and the theme wallpaper on the pixman compositor at 1280x800 on the VM's DRM display, screenshot in [`docs/pixman-renderer/i686-quickshell.png`](docs/pixman-renderer/i686-quickshell.png) - but **the greetd login into it is not**: the compositor still aborts on heap corruption during its first frames often enough to leave you at the greeter. Bring it up by hand and retry; the runbook's troubleshooting section has the backtrace. Nothing on i686 has been proven on hardware. So on the MacBook path, treat the list as what the stack did rather than what it does, and a report that one of those items no longer works is especially useful.
+**"What works today" below was proven on the sway session.** On **x86_64 it has been proven again on Hyprland**, on 2026-08-31, and a third time with the real Quickshell desktop on 2026-09-01: a VM installed from this tree boots, greetd starts the session itself, `hyprctl systeminfo` says `Renderer: pixman (software)`, and the Quickshell bar, the Omarchy menu on a real `Super+Space`, notifications and theme switching all work with Qt on its software scenegraph.
+
+**On i686 the greetd login works as of 2026-09-02.** A fresh image built by following [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md) literally boots under 32-bit UEFI at 2048 MB and greetd puts you on the desktop with no hand-holding: bar, tray, clock, theme wallpaper, foot on `Super+Return` and the Omarchy menu on `Super+Space`, `Renderer: pixman (software)` on `Backend: drm`, zero failed units, 491 MB of the 2 GB in use. Screenshot: [`docs/pixman-renderer/i686-greetd-desktop.png`](docs/pixman-renderer/i686-greetd-desktop.png).
+
+Until that day the same install crashed on **every** login. The cause was one line of configuration, `input:numlock_by_default`, which the fork now ships off: turning numlock on at startup makes Hyprland build a second xkb state per keyboard, and on i686 that path corrupts the heap, so the abort landed in a pixman region `realloc` and every backtrace pointed at the renderer. The bisect ran one setting per variant on a fresh install - the whole fork config died 0 of 5, that line alone died 0 of 4, and the whole config with it off came back 4 of 5. **The renderer bug itself is not fixed**, and a background failure rate of about one start in five remains, so an occasional login that lands on the greeter is expected. Log in again. The full table is in the runbook under "The i686 login crash". Nothing on i686 has been proven on hardware.
 
 The renderer needs two environment variables, both set by `omarchy-hyprland-launch`: `HYPRLAND_RENDERER=pixman` picks the software renderer and `AQ_FORCE_ALLOCATOR=dumb` makes aquamarine allocate DRM dumb buffers. A stock Hyprland ignores both and then dies on the missing GLES 3.0, so the Hyprland and aquamarine binaries have to come from the fork build.
 
@@ -28,12 +32,20 @@ are the real upstream Omarchy shell (`shell/`, 175 files of QML,
 byte-identical to upstream), drawn by Qt Quick's **software** scenegraph
 on top of the pixman compositor. No GPU is involved at any layer.
 
-**This means you have to build two things from source**, because neither
+**On x86_64 you have to build two things from source**, because neither
 is in any repo: this fork's Hyprland/aquamarine, and Quickshell 0.3.1.
-The runbooks give exact commands - [`docs/runbooks/install-x86_64.md`](docs/runbooks/install-x86_64.md)
-step 10 for x86_64, [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md)
-step 5c for i686. It is about five minutes of compiling on a modern
-machine, and considerably longer on a Core Duo.
+[`docs/runbooks/install-x86_64.md`](docs/runbooks/install-x86_64.md)
+steps 9 and 10 give the exact commands, and it is about five minutes of
+compiling on a modern machine.
+
+**On i686 you install them, prebuilt.** The recipe there is sixteen
+components, `cmake` and `meson` from pip and a patch to
+wayland-protocols, which is a day of compiling on a Core Duo and not a
+sensible thing to ask of anyone at a MacBook. So the whole stack is
+published as one i686 tarball on the releases page and step 7 of
+[`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md)
+extracts it. The recipe is still in that runbook, at the end, for anyone
+who wants to rebuild it.
 
 If you are checking whether the CPU path is really being taken, this is
 the trap to know about: the variable is `QT_QUICK_BACKEND=software`.
@@ -95,8 +107,9 @@ fixed part of the shell is about 135 MB on 32-bit rather than 190 MB on
 [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md).
 
 What is **not** settled on i686 is stability, not size: the compositor
-still aborts on heap corruption during the first frames often enough to
-break a greetd login. See the runbook's troubleshooting section.
+still aborts on heap corruption during its first frames about one start
+in five. The configuration line that made it every start is fixed. See
+"The i686 login crash" in the runbook.
 
 Worth knowing before you blame the software scenegraph for any of
 this: the same shell in the same VM with `QT_QUICK_BACKEND` unset,
@@ -204,6 +217,12 @@ ls -l /dev/dri/
 
 # Login chain
 journalctl -b -u greetd --no-pager | tail -50
+
+# The compositor's own output. greetd sends the session through systemd-cat,
+# so this is where a compositor that died at login says why. It is the first
+# thing to attach when the desktop did not appear.
+journalctl -b -t omarchy-session --no-pager | tail -200
+ls -la ~/.cache/hyprland/ && cat ~/.cache/hyprland/hyprlandCrashReport*.txt
 
 # The renderer the session actually selected. This is the important one:
 # it should say "Renderer: pixman (software)". Do not grep the compositor's
