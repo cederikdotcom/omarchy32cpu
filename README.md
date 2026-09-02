@@ -60,10 +60,10 @@ use.
 
 ## Status
 
-Pre-release, and mid-migration. The fork shipped a sway substitute until
-the pixman renderer for Hyprland worked; sway is now deleted and the
-upstream Hyprland session is back. **Every install-level validation below
-was done on the sway session and has to be redone on Hyprland.**
+Pre-release. The fork shipped a sway substitute until the pixman renderer
+for Hyprland worked; sway is now deleted and the upstream Hyprland session
+is back. **Both architectures have been revalidated on Hyprland +
+Quickshell**, so nothing below rests on the sway session any more.
 
 Proven on the pixman renderer itself (see
 [`docs/pixman-renderer/PROGRESS.md`](docs/pixman-renderer/PROGRESS.md)):
@@ -72,17 +72,42 @@ i686 VM, damage-driven, at 0.05 % idle CPU.
 
 Proven end to end:
 
-- **i686**, on a bench that mimics the MacBook1,1 (32-bit CPU model,
-  2 GB RAM, IA32 UEFI firmware): the fork's own installer builds a
-  system that boots to a themed desktop with zero failed units. Proven
-  on the sway session and pending a rerun on Hyprland + Quickshell.
-- **x86_64**, in a VM with no GPU: the same procedure boots to the
+- **x86_64**, in a VM with no GPU: the fork's own installer boots to the
   Quickshell desktop with the pixman renderer, greetd starting the
   session itself, and Qt Quick on its software scenegraph. Screenshot:
   [`docs/pixman-renderer/x86_64-hyprland.png`](docs/pixman-renderer/x86_64-hyprland.png).
+- **i686**, on a bench that mimics the MacBook1,1 (32-bit Core Duo model,
+  2 GB RAM, IA32 UEFI firmware): a fresh image built by following
+  [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md)
+  literally boots firmware -> `BOOTIA32.EFI` -> GRUB -> kernel -> greetd
+  -> the desktop, with `Renderer: pixman (software)` on `Backend: drm`
+  and zero failed units. Five cold boots out of five landed on the
+  desktop. Screenshot:
+  [`docs/pixman-renderer/i686-greetd-desktop.png`](docs/pixman-renderer/i686-greetd-desktop.png).
+  The i686 compositor, shell and their unpackaged dependencies install
+  prebuilt from
+  [release `i686-20260902`](https://github.com/cederikdotcom/omarchy32cpu/releases/tag/i686-20260902).
 
-Not yet run on the physical MacBook (the GMA 950 render floor is the open
-hardware question), nor on any real x86_64 machine.
+**The full desktop fits in 2 GB, with room for a browser.** Measured in
+that i686 VM held at 2048 MB: idle it uses 489 MB and leaves 1466 MB
+free, of which the shell is 210 MB on the default wallpaper, the
+compositor 61 MB and a terminal 16 MB. A 1.3 GB workload ran on top of
+it with 260 MB still free and zram never touching more than 1 MB. The
+number that moves is the wallpaper, not the plugin set: shell RSS is
+about `135 MB + the decoded background`, which spans 144 MB to 272 MB
+across the wallpapers this repo ships.
+
+Two things are **not** settled, and a tester should expect both:
+
+- **About one login in five crashes the compositor** on i686. It is heap
+  corruption on the DRM page-flip path, and the fork has not fixed it -
+  it has only kept it out of the config line that used to reach it on
+  every single login. Log in again and you get in. Details in
+  [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md).
+- **Nothing has run on real hardware**, on either architecture. Every
+  figure above is a QEMU VM with an emulated framebuffer. The physical
+  MacBook's GMA 950 render floor is the open hardware question, and no
+  real x86_64 machine has been tried either.
 
 ## Documentation
 
