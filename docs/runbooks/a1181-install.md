@@ -1,7 +1,8 @@
 # Runbook: install Omarchy CPU (32-bit) on the MacBook1,1
 
-Status: **rehearsed from scratch on 2026-09-02, and the i686 login crash is
-fixed.** A fresh image was built by following the steps below in order, then
+Status: **rehearsed from scratch on 2026-09-02; the physical MacBook1,1 reached
+the ArchLinux32 live shell on 2026-09-03; installation is paused before writing
+the internal disk.** A fresh image was built by following the steps below in order, then
 booted under 32-bit UEFI firmware with 2048 MB, the MacBook's own memory size.
 Firmware -> `BOOTIA32.EFI` -> GRUB -> i686 kernel -> greetd -> **the desktop**,
 with no hand-holding: the bar, the tray, the clock, the theme wallpaper, a
@@ -17,11 +18,13 @@ line of ordinary configuration, `input:numlock_by_default`, and the fork now
 ships it off. The underlying renderer bug is still there. What that means for
 you, and what to do if you meet it anyway, is under "The i686 login crash".
 
-The remaining unknown is the hardware itself: see "At the machine: what to type,
-and what to look at" for the list of things a VM cannot answer, and "Rollback
-and recovery" for what to do when one of them goes wrong.
-
-Nothing in this file has been run on the MacBook. Every claim above comes from a VM, and the point of the session this runbook is written for is to find out which of them survive contact with an i945GM.
+The desktop and installed-system claims still come from the VM. What is now
+proven on the physical MacBook is the bootstrap through rEFIt, a small external
+i386-EFI GRUB, an i686 kernel and initramfs staged on Macintosh HD, and the USB
+live filesystem, ending at `root@archiso`. The installation, internal GRUB and
+desktop have not yet met the i945GM. See "At the machine: what to type, and what
+to look at" for those remaining checks, and "Rollback and recovery" before
+writing the disk.
 
 **One thing that rehearsal does not cover, and it is new.** The i686 rehearsal was run at commit `0faf8483`, before this integration landed. At that commit every shipped background was a `.jpg` or `.png` and `qt6-imageformats` was not in the package list. On the branch this runbook pins, **79 of the 92 backgrounds are `.webp`** and the Qt WebP plugin is what decodes them. So the i686 desktop has never once drawn a WebP wallpaper: the whole image path - the wallpaper, the picker's thumbnails, the memory the decoded image costs - is proven on x86_64 only. Treat it as one of the hardware unknowns, alongside the GMA 950. Item 2 of "At the machine" is where to test it.
 
@@ -31,7 +34,11 @@ This file describes one exact tree and one exact set of downloads. Take anything
 
 ### The repository
 
-Branch `integrate-upstream-quattro-20260902`. The last commit on it that changes anything that **runs** is `2f1378cc` ("Draw image picker thumbnails on the software backend"). Every commit after that one is documentation, this file included, so a checkout of the branch tip executes exactly the code the 2026-09-02 runtime gate validated.
+The integration branch was merged and removed. Use `main`; the hardware session
+started at `de1cf7a3`. The last commit in that tree that changes anything that
+**runs** is `2f1378cc` ("Draw image picker thumbnails on the software backend").
+Every commit between it and `de1cf7a3` is documentation, so that checkout
+executes exactly the code the 2026-09-02 runtime gate validated.
 
 The pin is that commit rather than the branch tip because a file cannot name the commit that contains it. Do not take the sentence on trust; the difference is checkable in three commands, and the first of them is something your report needs anyway:
 
@@ -81,7 +88,7 @@ browser and archlinux32 carries none of them.
 | `fontconfig-2.18.3-2-i686.pkg.tar.zst` | [i686-20260902](https://github.com/cederikdotcom/omarchy32cpu/releases/tag/i686-20260902) | **mandatory**, the text stack |
 | `omarchy32cpu-stack-i686-20260902.tar.zst` (+ `.sha256`) | the same release | **mandatory**, the compositor and the shell |
 | `neatvnc-0.8.1-4-i686.pkg.tar.zst` | the same release | optional, `omarchy-remote-view` |
-| this repository, branch `integrate-upstream-quattro-20260902` | `git clone https://github.com/cederikdotcom/omarchy32cpu` | `/usr/share/omarchy` |
+| this repository, `main` (hardware-session baseline `de1cf7a3`) | `git clone https://github.com/cederikdotcom/omarchy32cpu` | `/usr/share/omarchy` |
 
 Check every one of them against "The downloads" above before you carry them to the MacBook. Doing it on the machine you downloaded them with costs nothing; doing it after a failed install costs an afternoon.
 
@@ -108,6 +115,34 @@ neatvnc, and the stack tarball was never on it at all.
 - Omarchy Lite: no preinstalled applications. The core is the 82-package list
   in `install/omarchy-base.packages`, which pulls about 464 packages in total.
 
+## Technology map: what each layer does
+
+These names describe different stages. Reaching one does not imply the next
+one works.
+
+| Layer | Technology | Role in this installation | What physical testing proved |
+|---|---|---|---|
+| Firmware | Apple EFI32 | Runs at power-on and chooses an EFI application | Apple's own Option picker did not expose the Linux USB |
+| Firmware boot menu | rEFIt 0.14 on Macintosh HD | Works around the Apple picker and launches external EFI32 programs | It exposed and launched `BOOTIA32.EFI` |
+| Bootloader | GNU GRUB for `i386-efi` | Loads the Linux kernel and initramfs | USB discovery was unreliable; HFS+ loading from Macintosh HD worked |
+| Kernel bootstrap | `vmlinuz-linux` + `initramfs-linux.img` | Starts Linux and finds the live filesystem | Loaded from `/efi/omarchy`; needed `noefi nomodeset` |
+| Live environment | ArchLinux32 `archiso` | Provides the `root@archiso` shell used to install the target | Reached on the physical MacBook1,1 |
+| Package installer | `pacstrap`, `pacman`, `arch-chroot` | Builds the permanent ArchLinux32 system on the target partition | Not yet run on physical hardware |
+| Omarchy32 payload | This repository plus pinned i686 packages/stack | Adds the CPU-rendered compositor, shell, configuration and hardware fixes | Payload hashes passed; installed desktop remains untested on hardware |
+| Installed bootloader | GRUB `i386-efi` at `EFI/BOOT/BOOTIA32.EFI` | Boots the finished internal system without rEFIt | VM-rehearsed only; preserve rEFIt until cold-boot proven |
+
+The verified installation-media chain is therefore:
+
+```text
+Apple EFI32
+  -> rEFIt on Macintosh HD
+  -> small GNU GRUB i386-EFI loader on USB
+  -> kernel + initramfs on Macintosh HD
+  -> ArchLinux32 live filesystem on USB
+  -> pacstrap/chroot installer
+  -> Omarchy32 on the internal target partition
+```
+
 ## Prepare install media
 
 1. Verify the ISO, then write it to USB.
@@ -119,9 +154,32 @@ neatvnc, and the stack tarball was never on it at all.
 
    A wrong hash here is worth ten minutes of re-download and nothing else; a wrong hash discovered at step 7 looks like a hardware fault.
 
-2. If the Apple EFI does not boot it, add a 32-bit GRUB to the USB EFI
-   partition as `EFI/BOOT/BOOTIA32.EFI` (`grub-mkstandalone -O i386-efi`), or
-   burn a CD and boot via CSM (hold Alt, pick the "Windows" entry).
+2. The physical MacBook1,1 did **not** expose any tested USB layout in Apple's
+   Option/Alt picker: raw hybrid ISO, MBR with a separate ESP, GPT with a first
+   ESP, and one active MBR FAT32 volume all failed to appear. Install rEFIt 0.14
+   on Macintosh HD; it may take two restarts before its menu appears.
+
+3. A normal external `BOOTIA32.EFI` starts under rEFIt, but GRUB on this firmware
+   cannot reliably rediscover the USB by UUID or stable `(hdN,msdos1)` name.
+   Loading GRUB's native USB modules also produces repeated `Unknown key 0xff
+   detected`, and embedding the 9 MB kernel plus 128 MB initramfs makes a 137 MB
+   EFI image that rEFIt rejects with `Load Error`.
+
+4. The physically verified bootstrap is split across the disks:
+
+   - copy the live medium's `vmlinuz-linux` and `initramfs-linux.img` to
+     `/efi/omarchy/` on Macintosh HD;
+   - let rEFIt launch a small external i386-EFI GRUB with HFS/HFS+ support;
+   - have GRUB load those two files from Macintosh HD with `noefi nomodeset`;
+   - let the initramfs find the ArchLinux32 live filesystem on USB.
+
+   The session's small loader was 421,888 bytes, SHA-256
+   `226221a46c4ce362dad488e46ee732db9ea30db10be942386bd2d398c3b4d3ea`,
+   and reached `root@archiso`. The USB also carried
+   `PREPARE-MACINTOSH-HD.command` to copy and compare the two files. Historical
+   details and failed layouts are recorded in issues
+   [#20](https://github.com/cederikdotcom/omarchy32cpu/issues/20) and
+   [#21](https://github.com/cederikdotcom/omarchy32cpu/issues/21).
 
 ## Install
 
@@ -130,11 +188,31 @@ Run every command below in the live ISO environment unless it says otherwise.
 
 ### 1. Network and disk
 
-Boot the media and connect wifi. ath5k is in-tree, so `iwctl` sees the card.
+Boot the media and connect Wi-Fi. `ath5k` is in-tree, and `iwctl` connected the
+physical machine successfully. On the test LAN, `enp1s0` reported carrier but
+DHCP timed out; even a valid static `/22` address could not reach the Deco
+gateway. Do not mistake carrier for working Ethernet. That session used Wi-Fi;
+see historical issue
+[#22](https://github.com/cederikdotcom/omarchy32cpu/issues/22).
 
-Partition GPT: a 512 MB ESP (FAT32) and an ext4 root. Mount root at `/mnt` and
-the ESP at `/mnt/boot`. FDE is opt-in; if you use it, lower the argon2id cost
-first, because the default is tuned for a machine thirty times faster.
+With `noefi`, `efivars: fsopen not supported` is expected. The old TPM may also
+report error 38 while attempting to supply random data; neither stopped the
+live environment. `dmesg -n 1` quiets non-critical console messages during the
+install.
+
+Do **not** immediately erase all of the internal disk on this hardware. rEFIt
+and `/efi/omarchy` are the only recovery path proven to boot the USB; optical
+recovery is unavailable in the physical test. First use macOS Disk Utility to
+shrink Macintosh HD, retain a 10-15 GB macOS/rEFIt recovery partition (or the
+smallest safe size it permits), and create `OMARCHY-TARGET` in the remaining
+space. Reformat only that target as ext4 and keep the existing ESP. Reclaim the
+macOS partition only after the installed i386-EFI loader has survived repeated
+cold boots. See historical issue
+[#23](https://github.com/cederikdotcom/omarchy32cpu/issues/23).
+
+Mount the new ext4 root at `/mnt` and the existing ESP at `/mnt/boot`. FDE is
+opt-in; if you use it, lower the argon2id cost first, because the default is
+tuned for a machine thirty times faster.
 
 ### 2. Pacman on the installer
 
@@ -354,8 +432,7 @@ you are ready to reinstall the stack.
 ### 8. The repo, the user, and the system stage
 
 ```bash
-git clone --branch integrate-upstream-quattro-20260902 \
-  https://github.com/cederikdotcom/omarchy32cpu /mnt/usr/share/omarchy
+git clone https://github.com/cederikdotcom/omarchy32cpu /mnt/usr/share/omarchy
 
 # Prove you have the validated runtime tree before anything runs from it.
 git -C /mnt/usr/share/omarchy rev-parse HEAD                                   # record this
@@ -370,7 +447,11 @@ arch-chroot /mnt /usr/share/omarchy/bin/omarchy-apply-system --install-user <use
 `/usr/share/omarchy` is not negotiable: greetd's session command is an absolute
 path into it.
 
-The default branch is **not** the right checkout. `main` is the pre-integration tree at `907fc9b9`: it has 81 packages rather than 82 (no `qt6-imageformats`, so 79 of the 92 shipped backgrounds decode to nothing), it does not carry the image-picker fix, and it does not carry this runbook. Clone the branch by name as above, or you are testing something else.
+`main` contains the merged integration and is the checkout used for the hardware
+session. Record its exact commit before running the system stage. If it no
+longer contains runtime pin `2f1378cc`, or the diff from that pin includes
+unexpected runtime paths, stop and reassess rather than silently testing a
+different stack.
 
 `omarchy-apply-system` runs config, hardware detection, the greetd login config
 and post-install, and logs to `/var/log/omarchy-install.log`. It takes about
