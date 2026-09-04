@@ -26,7 +26,7 @@
         "test/shell.d/nvidia-kms-hook-test.sh",
         "test/shell.d/nvidia-kms-migration-test.sh"
       ],
-      "handling": "Hyprland runs on this fork's pixman renderer (cederikdotcom/Hyprland branch pixman-renderer with cederikdotcom/aquamarine branch cpu-backend), selected at session start by HYPRLAND_RENDERER=pixman and AQ_FORCE_ALLOCATOR=dumb. In-tree that means flat mode (animations off, and the effects upstream already ships off stay off), two settings turned off because they crash the compositor on the 32-bit target (numlock_by_default and the gsettings cursor-theme write), and no Vulkan or NVIDIA install path.",
+      "handling": "Hyprland runs on this fork's pixman renderer (cederikdotcom/Hyprland branch pixman-renderer with cederikdotcom/aquamarine branch cpu-backend), selected at session start by HYPRLAND_RENDERER=pixman and AQ_FORCE_ALLOCATOR=dumb. In-tree that means flat mode (animations off, and the effects upstream already ships off stay off), two settings turned off because they crash the compositor on the 32-bit target (numlock_by_default and the gsettings cursor-theme write), MacBook1,1 left on Hyprland's safe input defaults after physical input exposed a remaining heap-corruption path, and no Vulkan or NVIDIA install path.",
       "rationale": "The target machine has a GMA 950 and no GLES 3.0, so upstream's renderer cannot start at all. The compositor work itself is out-of-tree and is the subject of issue #1; what lands here is the configuration and installer surface that assumes it. docs/pixman-renderer/ is the bench evidence (plan, progress, benchmark, screenshots) that keeps the port reviewable.",
       "shared_with": [
         "session-launch"
@@ -244,11 +244,14 @@
       "pathspecs": [
         "install/hardware/all.sh",
         "install/hardware/apple/fix-a1181.sh",
-        "install/hardware/intel/sof-firmware.sh"
+        "install/hardware/intel/sof-firmware.sh",
+        "test/shell.d/a1181-input-test.sh"
       ],
-      "handling": "A new install/hardware/apple/fix-a1181.sh joins the hardware chain for the A1181's own quirks, and the Intel SOF firmware step skips the i945's ICH7 audio (PCI 8086:27a2), which is plain snd_hda_intel and needs no SOF.",
-      "rationale": "Upstream's hardware chain has no entry for 2006 Apple hardware. These are additive detections gated on the hardware they match, so they cost nothing on any other machine - the cheapest kind of divergence to carry, and the kind most likely to be acceptable upstream.",
-      "shared_with": []
+      "handling": "A new install/hardware/apple/fix-a1181.sh joins the hardware chain for the A1181's own quirks, and the Intel SOF firmware step skips the i945's ICH7 audio (PCI 8086:27a2), which is plain snd_hda_intel and needs no SOF. default/hypr/input.lua also leaves MacBook1,1 on Hyprland's input defaults: applying the fork's full input block corrupts the i686 compositor heap during real appletouch or keyboard input, while the defaults have been physically verified with both devices.",
+      "rationale": "Upstream's hardware chain has no entry for 2006 Apple hardware. These adaptations are gated on the hardware they match, so they cost nothing on any other machine - the cheapest kind of divergence to carry, and the kind most likely to be acceptable upstream.",
+      "shared_with": [
+        "render-cpu"
+      ]
     },
     {
       "id": "storage-snapshots",

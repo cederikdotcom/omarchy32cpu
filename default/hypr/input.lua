@@ -1,5 +1,25 @@
 -- https://wiki.hypr.land/Configuring/Basics/Variables/#input
 
+local function dmi_product_name()
+  local file = io.open("/sys/class/dmi/id/product_name", "r")
+  if not file then
+    return ""
+  end
+
+  local product = file:read("*l") or ""
+  file:close()
+  return product
+end
+
+-- The i686 Hyprland build corrupts its heap when this input block is applied
+-- on the first-generation MacBook. The failure is input-driven: the session
+-- reaches the desktop, then aborts while handling appletouch or keyboard
+-- state. Hyprland's defaults handle both devices correctly, so leave this one
+-- model on those defaults while retaining the rest of Omarchy's desktop.
+if dmi_product_name() == "MacBook1,1" then
+  return
+end
+
 local function read_vconsole()
   local values = {}
   local file = io.open("/etc/vconsole.conf", "r")

@@ -680,6 +680,10 @@ keyboard that starts with numlock off, and the MacBook1,1 has no numpad.
 With the line off, **five cold boots out of five put the desktop on screen**,
 greetd's own autologin, no retries, nothing by hand.
 
+**The 2026-09-04 physical install found the remaining hardware-specific trigger.** The first real MacBook1,1 session reached the complete Omarchy desktop and then aborted after about five minutes of physical input; the next lasted 47 seconds. One core stopped in libinput while processing an out-of-range `appletouch` coordinate, and another stopped while Hyprland updated keyboard modifier state. Both exposed the same heap corruption rather than two independent crashes. Leaving `numlock_by_default` off was therefore necessary but not sufficient on the actual A1181.
+
+Skipping `default.hypr.input` only on DMI product `MacBook1,1` kept the rest of the Omarchy configuration intact: 207 bindings, the Quickshell panel and menu, theme, window rules and autostart all remained loaded. That session survived more than 30 minutes, synthetic and physical typing, and physical trackpad movement without another core. The installed `appletouch` driver initially enumerated without emitting events; unloading and reloading that one module initialized it in Geyser mode and restored movement without restarting Hyprland. The shipped guard now leaves this model on Hyprland's input defaults; every other model still receives Omarchy's input tuning.
+
 Two things this does not mean. It does not mean the renderer is fixed: the
 hand-start harness still lost about one start in five, visible in the 3/4, 5/6
 and 4/5 rows above, so **a login that lands on the greeter is possible**. Log in
