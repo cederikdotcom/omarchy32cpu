@@ -22,6 +22,10 @@ shift
 
 while (( $# > 0 )); do
   if [[ $1 == "--path" ]]; then
+    echo 'unsupported on libvips 8.16: --path' >&2
+    exit 1
+  fi
+  if [[ $1 == "--output" ]]; then
     output=${2%%\[*}
     break
   fi

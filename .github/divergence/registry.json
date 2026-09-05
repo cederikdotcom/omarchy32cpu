@@ -199,10 +199,13 @@
       "pathspecs": [
         "default/pacman/",
         "install/post-install/pacman.sh",
+        "bin/omarchy-menu-images",
+        "test/shell.d/menu-images-test.sh",
         "bin/omarchy-powerprofiles-list"
       ],
       "handling": "The three channel pacman.conf files and their mirrorlists carry archlinux32's repositories and mirror.archlinux32.org. install/post-install/pacman.sh applies them only when uname -m reports i686, so running the same tree on x86_64 no longer destroys pacman. bin/omarchy-powerprofiles-list uses POSIX bracket expressions instead of GNU awk's \\s.",
       "rationale": "i686 packages come from archlinux32, which is a separate distribution with its own mirrors, keyring and (older) toolchain. The arch-conditional application is the load-bearing part: the tree is shared between both targets and either config is fatal on the other.",
+      "notes": "The image menu uses vipsthumbnail --output, supported by the target's 8.16.1 and newer libvips, instead of the newer --path spelling; the thumbnail test rejects the unsupported option. Remove this compatibility difference once the target can use upstream's CLI unchanged.",
       "shared_with": []
     },
     {
