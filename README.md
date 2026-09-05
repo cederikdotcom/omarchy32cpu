@@ -35,7 +35,7 @@ This is pre-release software. It now boots and runs the real Omarchy desktop on 
 | SDDM greeter | greetd + tuigreet, autologin session | no GL at login |
 | limine + 64-bit UKI | GRUB i386-efi as BOOTIA32.EFI | 32-bit Apple EFI |
 | Arch x86_64 + pkgs.omarchy.org | archlinux32 i686 + fork overrides | 32-bit CPU |
-| 147-package app fleet | 78-package core, bring your own apps | 2 GB RAM |
+| Upstream app fleet | Minimal core, bring your own apps | Physical target has about 1 GB usable RAM |
 
 The compositor is real Hyprland, not a substitute: this fork's
 [Hyprland](https://github.com/cederikdotcom/Hyprland/tree/pixman-renderer)
@@ -53,6 +53,8 @@ live session over VNC (wayvnc, CPU-side screencopy) for cloud and headless
 use.
 
 ## Status
+
+The physical convergence run now includes upstream `quattro` through `36e56f4f`. Linux reports approximately **1 GB usable RAM on the actual Mac**, unlike the 2 GB VM used for the older memory figures below. Recovered compatibility package recipes live in [`packages/`](packages/README.md).
 
 Pre-release. The fork shipped a sway substitute until the pixman renderer
 for Hyprland worked; sway is now deleted and the upstream Hyprland session

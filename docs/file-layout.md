@@ -1,7 +1,7 @@
 # File layout
 
 > **omarchy32cpu note.** This page is upstream's, and it still describes trees
-> this fork does not ship (`plymouth/`, the limine entries, `install/user/chromium.sh`,
+> this fork does not activate or ship (the limine entries, `install/user/chromium.sh`,
 > `mise` shims on `PATH`). The login layer is this fork's own: `install/login/`
 > holds `greetd.sh` and `wayland-session.sh`, which install the greetd config and
 > drop `default/wayland-sessions/omarchy.desktop` into `/usr/share/wayland-sessions/`
@@ -9,6 +9,8 @@
 > for what diverges and why. The A1181 port's corrected chronology and
 > installation lessons live under [`docs/history/`](history/a1181-port-lessons.md),
 > which is repository documentation and is installed in neither package.
+
+The convergence branch retains upstream's `default/plymouth/`, `etc/plymouth/`, Plymouth commands, and `default/sddm/` unchanged. They are dormant source assets: the Mac's package selection, initramfs, and greetd activation still omit Plymouth and SDDM. Compatibility package recipes and their read-only linker gate live under [`packages/`](../packages/README.md).
 
 How `omarchy/` is organized and where everything ends up on an installed
 system.

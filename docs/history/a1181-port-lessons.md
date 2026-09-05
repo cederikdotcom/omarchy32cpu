@@ -2,7 +2,7 @@
 
 This record preserves the decisions, failed assumptions, measurements, and recovery lessons from the Omarchy Quattro 2006 Mac work between 2026-08-30 and 2026-09-05. It is historical evidence, not an installation procedure. Use [`../runbooks/a1181-install.md`](../runbooks/a1181-install.md) for the current procedure, [`../../TESTING.md`](../../TESTING.md) for the current acceptance contract, and [`../RELEASE-NOTES.md`](../RELEASE-NOTES.md) for the chronological technical record.
 
-The target is the early-2006 white MacBook A1181, EMC 2092, reported by DMI as `MacBook1,1`: 32-bit Core Duo, 2 GB RAM, Intel GMA 950, and Apple EFI32.
+The target is the early-2006 white MacBook A1181, EMC 2092, reported by DMI as `MacBook1,1`: 32-bit Core Duo, Intel GMA 950, and Apple EFI32. The VM used 2 GB RAM, which is the machine's supported capacity. The later physical convergence audit found only `990688 kB` usable RAM, approximately 1 GB, on this installed machine.
 
 ## The result
 
@@ -55,7 +55,7 @@ The physical Mac found what the VM could not:
 
 - Apple's Option picker did not expose the tested USB layouts. rEFIt launched a small external i386-EFI GRUB, but GRUB could not reliably rediscover USB and a 137 MB EFI embedding kernel/initramfs failed to load. The working split loaded kernel and initramfs from Macintosh HD and the live filesystem from USB. See historical issues [#20](https://github.com/cederikdotcom/omarchy32cpu/issues/20) and [#21](https://github.com/cederikdotcom/omarchy32cpu/issues/21).
 - Ethernet carrier on `enp1s0` did not mean packets reached the Deco network. ath5k Wi-Fi through iwd worked and later remained connected through NetworkManager with powersave disabled. See [#22](https://github.com/cederikdotcom/omarchy32cpu/issues/22).
-- The first installed desktop proved GMA 950 scanout, greetd, the pixman compositor, Qt software rendering, and the upstream shell on the actual 2 GB Core Duo.
+- The first installed desktop proved GMA 950 scanout, greetd, the pixman compositor, Qt software rendering, and the upstream shell on the physical Core Duo.
 - Input exposed additional failures after the desktop appeared. Reloading only `appletouch` initialized Geyser mode and restored motion without restarting Hyprland. libinput then needed the exact `05ac:0217` one-button model override at `/etc/libinput/local-overrides.quirks`; arbitrary filenames in `/etc/libinput` are ignored.
 - The control path should start from the live or installed Arch system with key-only SSH. That made package rebuilding, driver reloads, log capture, and reversible session tests possible without depending on the graphical desktop.
 
@@ -83,7 +83,7 @@ Both passed `pacman -Qkk` with zero altered files. The rebuilt dconf passed its 
 
 ## Session continuity is part of the test system
 
-Two working sessions were lost during the hardware effort, and the surviving `omarchy` tmux pane appeared to have no scrollback because the full-screen client had used the terminal's alternate screen. The work was recoverable only because the agent transcript, repository state, process list, target journals, and package cache still existed. Empty tmux history did not mean the work had never happened.
+The user reported that two working sessions appeared to be lost during the hardware effort. The surviving `omarchy` tmux pane had no useful scrollback because the full-screen client had used the terminal's alternate screen. Its history was recovered from the agent transcript and checked against repository state, target journals, and the package cache. Complete recovery of both missing sessions was not established. Empty tmux history did not mean the work had never happened.
 
 Future sessions should not depend on a terminal window as the system of record:
 

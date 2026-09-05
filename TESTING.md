@@ -26,6 +26,8 @@ The renderer needs two environment variables, both set by `omarchy-hyprland-laun
 
 ### Physical MacBook1,1 baseline
 
+Hardware correction from the convergence run on 2026-09-05: `/proc/meminfo` reports `MemTotal: 990688 kB`, approximately **1 GB installed/usable**, while the VM measurements below used 2 GB. The machine supports a 2 GB configuration; do not describe that capacity as the installed memory. Before the rebuild workload, the physical session had 499 MB available, Quickshell RSS about 142 MB, Hyprland RSS about 45 MB, and 125 MB of zram swap in use after nearly 14 hours of uptime.
+
 As of 2026-09-05, the target reports Linux `6.19.11-arch1-1.0` i686 and repository commit `21d1f16ca36c37ae25a32dcba24484be7a5e9d32`. greetd, sshd, and NetworkManager are active; Hyprland 0.56.2 and Quickshell run together; Wi-Fi is connected; and the internal `05ac:0217` appletouch device is present. The package baseline includes glib2 `2.80.0-2.0`, Qt `6.7.2`, rebuilt libinput `1.29.1-1.1`, and rebuilt dconf `0.49.0-1.1`.
 
 The current appletouch classification must include both `ModelAppleTouchpad=1` and `ModelAppleTouchpadOneButton=1`. The exact local quirk filename is `/etc/libinput/local-overrides.quirks`; libinput ignores arbitrary `.quirks` filenames placed beside it. Hyprland's click path has been proven with the root-only ydotool validation socket and two temporary windows. Physical left-click and two-finger right-click are still awaiting a captured hands-on pass.

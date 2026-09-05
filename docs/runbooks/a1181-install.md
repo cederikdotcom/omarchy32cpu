@@ -12,6 +12,8 @@ The path from the first incorrect feasibility conclusion to the working machine,
 
 ## What this runbook is pinned to
 
+Convergence update: the physical Mac reports about 1 GB usable RAM (`MemTotal: 990688 kB`); 2 GB below refers to the VM or the hardware's supported capacity. All six upstream commits through `36e56f4f` are integrated. The recovered libinput/dconf recipes and the natively tested libvips thumbnail rebuild are in [`../../packages/`](../../packages/README.md); binary publication and signing remain outstanding. See the [convergence report](../history/macbook-convergence-20260905.md) for the live-session evidence and remaining gates.
+
 This file describes one exact tree and one exact set of downloads. Take anything else and the failure modes below may not apply to what you are looking at.
 
 ### The repository
@@ -36,7 +38,7 @@ git config --global --add safe.directory /usr/share/omarchy
 
 ### The downloads
 
-Every checksum here was taken on **2026-09-02** by fetching the file fresh from the public URL in its own row and hashing what arrived. They are what a correct download looks like; a mismatch means the asset moved, the mirror is serving something else, or the transfer was damaged. In all three cases stop.
+Public download checksums below were taken on **2026-09-02** by fetching and hashing the files. The three private compatibility-package hashes were taken from the validated physical machine on **2026-09-05 UTC**. A mismatch means a different artifact or a damaged transfer; stop and establish which before installing.
 
 | File | From | sha256 |
 |---|---|---|
@@ -46,6 +48,7 @@ Every checksum here was taken on **2026-09-02** by fetching the file fresh from 
 | `omarchy32cpu-stack-i686-20260902.tar.zst` | the same release | `076898faf348827de2916dbed0bef2d42428daea83f1786e055c84c37267f20f` |
 | `libinput-1.29.1-1.1-pentium4.pkg.tar.zst` | validated Mac pacman cache; not published | `0c0da2a57be39c13841449caa7a8217c596e3cfb13a731a6f55a82749df2201b` |
 | `dconf-0.49.0-1.1-pentium4.pkg.tar.zst` | validated Mac pacman cache; not published | `dcb02727a8e3ce658c1716d1a483969bb088fd06f040a385b4ed149396e46130` |
+| `libvips-8.16.1-1-pentium4.pkg.tar.zst` | validated Mac pacman cache; not published | `83be98e78b105b153f63c7d2289629cef19d6dcde9db679e2a72b74d1c5acaa3` |
 
 Three things worth knowing about that table.
 
@@ -57,11 +60,11 @@ Three things worth knowing about that table.
 
 What could not be pinned, stated rather than invented: the archlinux32 **repositories** move under you. `pacstrap` in step 3 resolves about 464 packages live, and no checksum here covers them. The versions this runbook depends on are named where they matter (`qt6-base 6.7.2`, `pipewire 0.3.65`, `libinput 1.27`, `fontconfig 2:2.14.1` before the override), and step 8 installs a `pacman.conf` that pins the architecture and the mirror. If archlinux32 moves one of them, the symptom will be in "Troubleshooting" or it will be new, and new is worth a report.
 
-**Fresh-install reproducibility warning:** release `i686-20260902` is no longer the entire physical baseline. The working Mac also uses the rebuilt libinput and dconf packages in the table, and those packages and PKGBUILDs have not yet been published. They currently exist only in the validated machine's pacman cache. For a fresh machine, copy and hash those files from the validated target or stop until signed release assets/package-repository entries exist. Do not substitute moving ArchLinux32 packages and call the result equivalent.
+**Fresh-install reproducibility warning:** release `i686-20260902` is not the entire physical baseline. The working Mac also uses the three rebuilt packages in the table. Their recipes are now in git, but the tested binaries are private cache/relay artifacts, not signed release assets. For an equivalent fresh machine, copy and hash those binaries; alternatively rebuild from the recipes and record a new validation baseline. Do not substitute moving ArchLinux32 packages and call the result equivalent.
 
 ## Before you start: what you need in your hand
 
-Six mandatory inputs define the current physical baseline, with neatvnc as a seventh optional input for remote viewing. Download or export the ones you will use before you begin, because the target has no browser and the libinput and dconf package files are not public release assets.
+Seven mandatory inputs define the current physical baseline, with neatvnc as an eighth optional input for remote viewing. Download or export the ones you will use before you begin, because the target has no browser and the three compatibility packages are not public release assets.
 
 | What | Where | Needed for |
 |---|---|---|
@@ -71,6 +74,7 @@ Six mandatory inputs define the current physical baseline, with neatvnc as a sev
 | `neatvnc-0.8.1-4-i686.pkg.tar.zst` | the same release | optional, `omarchy-remote-view` |
 | `libinput-1.29.1-1.1-pentium4.pkg.tar.zst` | validated Mac pacman cache | **mandatory**, packaged ownership of the libinput used by Hyprland |
 | `dconf-0.49.0-1.1-pentium4.pkg.tar.zst` | validated Mac pacman cache | **mandatory**, dconf built against the installed glib2 2.80 ABI |
+| `libvips-8.16.1-1-pentium4.pkg.tar.zst` | validated Mac pacman cache | **mandatory**, working JPEG/PNG/WebP wallpaper thumbnails |
 | this repository, `main` (physical package/input baseline `21d1f16c`) | `git clone https://github.com/cederikdotcom/omarchy32cpu` | `/usr/share/omarchy` |
 
 Check every one of them against "The downloads" above before you carry them to the MacBook. Doing it on the machine you downloaded them with costs nothing; doing it after a failed install costs an afternoon.
@@ -407,24 +411,26 @@ arch-chroot /mnt quickshell --version    # Quickshell 0.3.1 ... distributed by o
 A non-zero count on `Hyprland` naming `FcConfigSetDefaultSubstitute` means step
 6 did not take.
 
-Now install the two rebuilt packages that complete the tested physical closure. They are deliberately installed **after** extracting the stack so pacman owns and replaces the tarball's libinput library. Copy both files from the validated Mac's pacman cache to `/mnt/root` first; do not continue from a fresh install if those exact artifacts are unavailable.
+Now install the three rebuilt packages that complete the tested physical closure. They are deliberately installed **after** extracting the stack so pacman owns and replaces the tarball's libinput library. Copy all three from the validated Mac's pacman cache to `/mnt/root` and verify their hashes first. A source rebuild needs its own recorded package hash and target validation.
 
 ```bash
 cat > /mnt/root/physical-overrides.sha256 <<'EOF'
 0c0da2a57be39c13841449caa7a8217c596e3cfb13a731a6f55a82749df2201b  libinput-1.29.1-1.1-pentium4.pkg.tar.zst
 dcb02727a8e3ce658c1716d1a483969bb088fd06f040a385b4ed149396e46130  dconf-0.49.0-1.1-pentium4.pkg.tar.zst
+83be98e78b105b153f63c7d2289629cef19d6dcde9db679e2a72b74d1c5acaa3  libvips-8.16.1-1-pentium4.pkg.tar.zst
 EOF
 arch-chroot /mnt bash -c 'cd /root && sha256sum -c physical-overrides.sha256'
 arch-chroot /mnt pacman -U --noconfirm \
   /root/libinput-1.29.1-1.1-pentium4.pkg.tar.zst \
-  /root/dconf-0.49.0-1.1-pentium4.pkg.tar.zst
+  /root/dconf-0.49.0-1.1-pentium4.pkg.tar.zst \
+  /root/libvips-8.16.1-1-pentium4.pkg.tar.zst
 arch-chroot /mnt ldconfig
-arch-chroot /mnt pacman -Q libinput dconf glib2
-arch-chroot /mnt pacman -Qkk libinput dconf
+arch-chroot /mnt pacman -Q libinput dconf glib2 libvips
+arch-chroot /mnt bash /usr/share/omarchy/packages/validate-runtime
 arch-chroot /mnt ldd -r /usr/local/bin/Hyprland | grep -c 'undefined symbol'  # want 0
 ```
 
-The final package lines should report libinput `1.29.1-1.1`, dconf `0.49.0-1.1`, glib2 `2.80.0-2.0`, and zero altered files. The dconf service cannot be meaningfully exercised inside the chroot. After the first login, test its actual D-Bus write/read/reset path:
+The final package lines should report libinput `1.29.1-1.1`, dconf `0.49.0-1.1`, glib2 `2.80.0-2.0`, libvips `8.16.1-1`, and zero altered files. After login, generate real wallpaper thumbnails with `omarchy-menu-images --cache-only "$HOME/.local/state/omarchy/current/theme/backgrounds"` and verify that `.jpg` files exist under `~/.cache/omarchy/image-selector`; the command's exit status alone does not prove conversions succeeded. The dconf service cannot be meaningfully exercised inside the chroot. After the first login, test its actual D-Bus write/read/reset path:
 
 ```bash
 dbus-run-session sh -c '
@@ -546,7 +552,7 @@ arch-chroot /mnt
 | 4 keyring | Keyring half-built, later `pacman` calls fail on signatures | Yes | `rm -rf /mnt/etc/pacman.d/gnupg`, then re-run the three `pacman-key` commands |
 | 5 system files, initramfs | An initramfs that does not boot | Yes | `arch-chroot /mnt mkinitcpio -P` is idempotent. Before you regenerate a *working* one, `cp /mnt/boot/initramfs-linux.img /mnt/boot/initramfs-linux.img.bak`; if the new one dies, boot the USB, chroot and copy the backup back |
 | 6 overrides | Wrong or missing `fontconfig` | Yes | `pacman -U` is atomic: a failed one changed nothing. To go back to the repo version, `arch-chroot /mnt pacman -S fontconfig` |
-| 7 stack and physical override packages | A half-extracted `/usr/local`, or the stack's unowned libinput shadowing the package | Yes | Re-extract the same tarball, immediately reinstall the pinned libinput and dconf packages, and run `ldconfig`, `pacman -Qkk`, and both `ldd -r` checks. A zero undefined-symbol count and zero altered package files establish ownership and closure |
+| 7 stack and physical override packages | A half-extracted `/usr/local`, or the stack's unowned libinput shadowing the package | Yes | Re-extract the same tarball, immediately reinstall the pinned libinput, dconf, and libvips packages, run `ldconfig`, then `bash /usr/share/omarchy/packages/validate-runtime`. Zero unresolved symbols and zero altered package files establish ownership and closure |
 | 8 `omarchy-apply-system` | **The dangerous one. See below** | Yes, and a re-run is cheap | Re-run the same command; the scripts are written to be re-runnable |
 | 9 user stage | A partly seeded `~/.config` | Yes | Re-run it; `--force` is what makes it overwrite |
 | 10 bootloader | A machine that will not boot | Yes | Boot the USB, chroot, run `omarchy-refresh-grub` again. Confirm `ls -la /mnt/boot/EFI/BOOT/BOOTIA32.EFI` before you reboot, every time |
