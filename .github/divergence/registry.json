@@ -112,7 +112,7 @@
       "id": "boot-splash",
       "issue": 6,
       "title": "Plymouth activation deferred; upstream assets retained",
-      "status": "deferred",
+      "status": "resolved",
       "expect_paths": false,
       "pathspecs": [
         "bin/omarchy-plymouth-*",
