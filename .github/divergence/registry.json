@@ -79,7 +79,7 @@
         "install/login/",
         "install/config/increase-lockout-limit.sh"
       ],
-      "handling": "The SDDM theme, its Qt QML greeter and its two config drop-ins are deleted; install/login/greetd.sh configures greetd with tuigreet against bin/omarchy-hyprland-launch for both the greeter session and autologin. The faillock hardening keeps its /etc/pam.d/system-auth half and drops the sddm-autologin half, because greetd reaches system-auth through its own packaged PAM file.",
+      "handling": "The upstream SDDM theme assets are retained unchanged as dormant source files. Its config drop-ins and activation are replaced: install/login/greetd.sh configures greetd with tuigreet against bin/omarchy-hyprland-launch for both the greeter session and autologin. The faillock hardening keeps its /etc/pam.d/system-auth half and drops the sddm-autologin half, because greetd reaches system-auth through its own packaged PAM file.",
       "rationale": "SDDM's greeter needs a GL context and this target has no GPU, so the login screen never renders. greetd + tuigreet is a text greeter with the same job. Both are in extra on both arches.",
       "shared_with": [
         "packages-core"
@@ -111,8 +111,9 @@
     {
       "id": "boot-splash",
       "issue": 6,
-      "title": "Plymouth boot splash removed",
+      "title": "Plymouth activation deferred; upstream assets retained",
       "status": "deferred",
+      "expect_paths": false,
       "pathspecs": [
         "bin/omarchy-plymouth-*",
         "bin/omarchy-refresh-plymouth",
@@ -120,8 +121,8 @@
         "etc/plymouth/",
         "test/shell.d/plymouth-set-test.sh"
       ],
-      "handling": "The whole Plymouth surface is deleted: the eight bin/omarchy-plymouth-* commands, the theme assets and script, the plymouthd config, and the 968-line test file. The Style > Unlock menu entry that drove them is removed with it.",
-      "rationale": "Plymouth adds initramfs weight and hides exactly the boot messages a tester on unproven 2006 hardware needs to read. It is available on both arches, so this is a deliberate deferral, not an incompatibility - and it is one of the two heaviest deletions in the fork, which is why it is tracked on its own rather than folded into the package set.",
+      "handling": "The upstream commands, theme assets, config source, and tests are retained unchanged. Plymouth is still absent from the core package list and initramfs, so it adds no running process or boot cost. Style > Unlock is available only when the Plymouth executable and installed Omarchy theme exist; that menu guard is accounted under hypr-tooling.",
+      "rationale": "Deferring activation does not require deleting upstream's implementation. Retaining dormant source files removes a large merge surface while preserving the Mac's visible boot diagnostics. This entry can have zero divergent files while the package choice remains deferred.",
       "shared_with": [
         "boot-loader",
         "hypr-tooling"
@@ -141,7 +142,7 @@
         "default/omarchy/omarchy-menu.jsonc",
         "test/shell.d/nightlight-test.sh"
       ],
-      "handling": "hyprsunset becomes wlsunset behind the same omarchy-toggle-nightlight / omarchy-restart-hyprsunset command names; hyprpicker becomes bin/omarchy-capture-color on grim + slurp; xdg-desktop-portal-hyprland becomes xdg-desktop-portal-wlr, so the hyprland-share-picker theme template has nothing to theme. The menu file is rewired to match, and also carries the Style > Unlock removal and the Remote View entry.",
+      "handling": "hyprsunset becomes wlsunset behind the same omarchy-toggle-nightlight / omarchy-restart-hyprsunset command names; hyprpicker becomes bin/omarchy-capture-color on grim + slurp; xdg-desktop-portal-hyprland becomes xdg-desktop-portal-wlr, so the hyprland-share-picker theme template has nothing to theme. The menu file is rewired to match, and also guards Style > Unlock on an installed Plymouth theme and adds Remote View.",
       "rationale": "None of the hypr* companions are packaged for archlinux32, and installing the ones that exist on x86_64 would drag in archlinux32's hyprutils, which this fork replaces with its own build for Hyprland 0.56. Each substitute implements the same user-visible behaviour, so the menu and command names are unchanged.",
       "shared_with": [
         "boot-splash",
