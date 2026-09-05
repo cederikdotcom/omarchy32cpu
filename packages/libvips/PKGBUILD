@@ -12,13 +12,13 @@ makedepends=(meson)
 provides=(libvips.so libvips-cpp.so)
 source=("https://github.com/libvips/libvips/releases/download/v$pkgver/vips-$pkgver.tar.xz")
 sha256sums=('d114d7c132ec5b45f116d654e17bb4af84561e3041183cd4bfd79abfb85cf724')
-options=(!debug)
+options=(!debug !lto)
 
 build() {
   # Keep JPEG/PNG/WebP wallpaper processing independent of optional loaders
   # whose ArchLinux32 packages have incompatible SONAMEs on the target.
   arch-meson "vips-$pkgver" build \
-    -Dauto_features=disabled -Dmodules=disabled -Dexamples=false \
+    --auto-features=disabled -Dmodules=disabled -Dexamples=false \
     -Djpeg=enabled -Dpng=enabled -Dwebp=enabled -Dlcms=enabled -Dzlib=enabled
   meson compile -C build -j 1
 }
