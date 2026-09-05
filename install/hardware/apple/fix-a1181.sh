@@ -1,6 +1,7 @@
 # Detect the 2006 MacBook1,1 (A1181): fans need mbpfan, the iSight camera
 # needs firmware extracted from the Apple driver by isight-firmware-tools,
-# and the ath5k Wi-Fi drops the link under powersave.
+# the ath5k Wi-Fi drops the link under powersave, and libinput does not list
+# this model's 05ac:0217 one-button touchpad in its legacy Apple quirks.
 product_name="$(cat /sys/class/dmi/id/product_name 2>/dev/null)"
 if [[ $product_name == "MacBook1,1" ]]; then
   echo "Detected MacBook1,1 (A1181). Installing support items..."
@@ -26,4 +27,23 @@ if [[ $product_name == "MacBook1,1" ]]; then
 [connection]
 wifi.powersave = 2
 EOF
+
+  # This pre-2008 touchpad has a physical button below the pad and advertises
+  # BTN_LEFT without BTN_RIGHT. Without the model flag, libinput assumes the
+  # kernel forgot INPUT_PROP_BUTTONPAD and suppresses button-only presses while
+  # it waits for a finger position on what it incorrectly treats as a clickpad.
+  mkdir -p /etc/libinput
+  # libinput only loads local quirks from this exact reserved filename.
+  local_quirks=/etc/libinput/local-overrides.quirks
+  if ! grep -Fq '[Apple Touchpad OneButton MacBook1,1]' "$local_quirks" 2>/dev/null; then
+    [[ ! -s $local_quirks ]] || printf '\n' >> "$local_quirks"
+    cat >> "$local_quirks" <<'EOF'
+[Apple Touchpad OneButton MacBook1,1]
+MatchUdevType=touchpad
+MatchBus=usb
+MatchVendor=0x05AC
+MatchProduct=0x0217
+ModelAppleTouchpadOneButton=1
+EOF
+  fi
 fi
