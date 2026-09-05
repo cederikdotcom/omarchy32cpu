@@ -1,32 +1,14 @@
 # Runbook: install Omarchy CPU (32-bit) on the MacBook1,1
 
-Status: **rehearsed from scratch on 2026-09-02; the physical MacBook1,1 reached
-the ArchLinux32 live shell on 2026-09-03; installation is paused before writing
-the internal disk.** A fresh image was built by following the steps below in order, then
-booted under 32-bit UEFI firmware with 2048 MB, the MacBook's own memory size.
-Firmware -> `BOOTIA32.EFI` -> GRUB -> i686 kernel -> greetd -> **the desktop**,
-with no hand-holding: the bar, the tray, the clock, the theme wallpaper, a
-terminal on `Super+Return` and the Omarchy menu on `Super+Space`. `hyprctl
-systeminfo` reports `Renderer: pixman (software)` and `Backend: drm`, the shell
-holds no `/dev/dri` descriptor, zero systemd units failed, and 491 MB of the
-2 GB is in use. Five cold boots out of five landed on the desktop.
+Status: **rehearsed from scratch in an EFI32/2-GB VM on 2026-09-02, bootstrapped on the physical MacBook1,1 on 2026-09-03, and running the installed Omarchy desktop on that machine by 2026-09-04.** The physical system now proves Apple EFI32 bootstrap, the ArchLinux32 i686 kernel, GMA 950 dumb-buffer scanout on the built-in 1280x800 panel, greetd, Hyprland's pixman renderer, the upstream Quickshell desktop, ath5k Wi-Fi, SSH, the keyboard, and pointer motion.
 
 Screenshot: [`../pixman-renderer/i686-greetd-desktop.png`](../pixman-renderer/i686-greetd-desktop.png).
 
-The crash that used to end every i686 login turned out to be reachable from one
-line of ordinary configuration, `input:numlock_by_default`, and the fork now
-ships it off. The underlying renderer bug is still there. What that means for
-you, and what to do if you meet it anyway, is under "The i686 login crash".
+The crash that used to end every i686 login was reproducibly triggered by `input:numlock_by_default` in the VM-era stack, and the fork still ships it off. Do not interpret the later allocator backtrace as a settled renderer root cause: physical work subsequently found independent dconf/glib and libinput packaging defects plus a missing appletouch model quirk. The historical reproducer and current recovery controls are under "The i686 login crash".
 
-The desktop and installed-system claims still come from the VM. What is now
-proven on the physical MacBook is the bootstrap through rEFIt, a small external
-i386-EFI GRUB, an i686 kernel and initramfs staged on Macintosh HD, and the USB
-live filesystem, ending at `root@archiso`. The installation, internal GRUB and
-desktop have not yet met the i945GM. See "At the machine: what to type, and what
-to look at" for those remaining checks, and "Rollback and recovery" before
-writing the disk.
+The physical input gate is not finished. The internal `05ac:0217` device now loads the missing `ModelAppleTouchpadOneButton=1` quirk and Hyprland's click path passes a synthetic two-window focus test, but physical left-click and two-finger right-click still need a recorded hands-on pass. Trackpad enumeration has intermittently needed an `appletouch` module reload to initialize Geyser mode.
 
-**One thing that rehearsal does not cover, and it is new.** The i686 rehearsal was run at commit `0faf8483`, before this integration landed. At that commit every shipped background was a `.jpg` or `.png` and `qt6-imageformats` was not in the package list. On the branch this runbook pins, **79 of the 92 backgrounds are `.webp`** and the Qt WebP plugin is what decodes them. So the i686 desktop has never once drawn a WebP wallpaper: the whole image path - the wallpaper, the picker's thumbnails, the memory the decoded image costs - is proven on x86_64 only. Treat it as one of the hardware unknowns, alongside the GMA 950. Item 2 of "At the machine" is where to test it.
+The path from the first incorrect feasibility conclusion to the working machine, including the validation ladder and the mistakes that should not be repeated, is preserved in [`../history/a1181-port-lessons.md`](../history/a1181-port-lessons.md).
 
 ## What this runbook is pinned to
 
@@ -34,21 +16,17 @@ This file describes one exact tree and one exact set of downloads. Take anything
 
 ### The repository
 
-The integration branch was merged and removed. Use `main`; the hardware session
-started at `de1cf7a3`. The last commit in that tree that changes anything that
-**runs** is `2f1378cc` ("Draw image picker thumbnails on the software backend").
-Every commit between it and `de1cf7a3` is documentation, so that checkout
-executes exactly the code the 2026-09-02 runtime gate validated.
+The integration branch was merged and removed. Use `main` and record the exact commit before changing the target. The physical package/input baseline described here ran repository commit `21d1f16ca36c37ae25a32dcba24484be7a5e9d32`; later documentation and installer fixes necessarily move `main` forward.
 
 The pin is that commit rather than the branch tip because a file cannot name the commit that contains it. Do not take the sentence on trust; the difference is checkable in three commands, and the first of them is something your report needs anyway:
 
 ```bash
 git -C /usr/share/omarchy rev-parse HEAD                              # put this in the report
-git -C /usr/share/omarchy merge-base --is-ancestor 2f1378cc HEAD && echo "runtime pin present"
-git -C /usr/share/omarchy diff --stat 2f1378cc HEAD                   # want: paths under docs/ only
+git -C /usr/share/omarchy merge-base --is-ancestor 21d1f16c HEAD && echo "physical baseline present"
+git -C /usr/share/omarchy diff --stat 21d1f16c HEAD                   # review every runtime path
 ```
 
-If the third command names a path outside `docs/`, you are not on the validated runtime tree and the pin is stale. Say so in the report rather than working around it.
+If the third command names a runtime path, state it in the report and verify the affected layer again rather than inheriting the 2026-09-05 result.
 
 Run those as **root**, or expect `detected dubious ownership in repository at '/usr/share/omarchy'`. The clone is made by root and git refuses a repository owned by somebody else. As your own user, either `sudo` them or tell git once that this one is fine:
 
@@ -66,6 +44,8 @@ Every checksum here was taken on **2026-09-02** by fetching the file fresh from 
 | `fontconfig-2.18.3-2-i686.pkg.tar.zst` | [`i686-20260902`](https://github.com/cederikdotcom/omarchy32cpu/releases/tag/i686-20260902) | `b2a55efe494658fd1ed04ec2d324d5d574f9dfb3e969b56d50912dca9050919f` |
 | `neatvnc-0.8.1-4-i686.pkg.tar.zst` | the same release | `1c6426f0e745314d5a912f83fc94035feb564553ee2dc956ff2e033f97515f56` |
 | `omarchy32cpu-stack-i686-20260902.tar.zst` | the same release | `076898faf348827de2916dbed0bef2d42428daea83f1786e055c84c37267f20f` |
+| `libinput-1.29.1-1.1-pentium4.pkg.tar.zst` | validated Mac pacman cache; not published | `0c0da2a57be39c13841449caa7a8217c596e3cfb13a731a6f55a82749df2201b` |
+| `dconf-0.49.0-1.1-pentium4.pkg.tar.zst` | validated Mac pacman cache; not published | `dcb02727a8e3ce658c1716d1a483969bb088fd06f040a385b4ed149396e46130` |
 
 Three things worth knowing about that table.
 
@@ -77,10 +57,11 @@ Three things worth knowing about that table.
 
 What could not be pinned, stated rather than invented: the archlinux32 **repositories** move under you. `pacstrap` in step 3 resolves about 464 packages live, and no checksum here covers them. The versions this runbook depends on are named where they matter (`qt6-base 6.7.2`, `pipewire 0.3.65`, `libinput 1.27`, `fontconfig 2:2.14.1` before the override), and step 8 installs a `pacman.conf` that pins the architecture and the mirror. If archlinux32 moves one of them, the symptom will be in "Troubleshooting" or it will be new, and new is worth a report.
 
+**Fresh-install reproducibility warning:** release `i686-20260902` is no longer the entire physical baseline. The working Mac also uses the rebuilt libinput and dconf packages in the table, and those packages and PKGBUILDs have not yet been published. They currently exist only in the validated machine's pacman cache. For a fresh machine, copy and hash those files from the validated target or stop until signed release assets/package-repository entries exist. Do not substitute moving ArchLinux32 packages and call the result equivalent.
+
 ## Before you start: what you need in your hand
 
-Five things. Download all of them before you begin, because the target has no
-browser and archlinux32 carries none of them.
+Six mandatory inputs define the current physical baseline, with neatvnc as a seventh optional input for remote viewing. Download or export the ones you will use before you begin, because the target has no browser and the libinput and dconf package files are not public release assets.
 
 | What | Where | Needed for |
 |---|---|---|
@@ -88,7 +69,9 @@ browser and archlinux32 carries none of them.
 | `fontconfig-2.18.3-2-i686.pkg.tar.zst` | [i686-20260902](https://github.com/cederikdotcom/omarchy32cpu/releases/tag/i686-20260902) | **mandatory**, the text stack |
 | `omarchy32cpu-stack-i686-20260902.tar.zst` (+ `.sha256`) | the same release | **mandatory**, the compositor and the shell |
 | `neatvnc-0.8.1-4-i686.pkg.tar.zst` | the same release | optional, `omarchy-remote-view` |
-| this repository, `main` (hardware-session baseline `de1cf7a3`) | `git clone https://github.com/cederikdotcom/omarchy32cpu` | `/usr/share/omarchy` |
+| `libinput-1.29.1-1.1-pentium4.pkg.tar.zst` | validated Mac pacman cache | **mandatory**, packaged ownership of the libinput used by Hyprland |
+| `dconf-0.49.0-1.1-pentium4.pkg.tar.zst` | validated Mac pacman cache | **mandatory**, dconf built against the installed glib2 2.80 ABI |
+| this repository, `main` (physical package/input baseline `21d1f16c`) | `git clone https://github.com/cederikdotcom/omarchy32cpu` | `/usr/share/omarchy` |
 
 Check every one of them against "The downloads" above before you carry them to the MacBook. Doing it on the machine you downloaded them with costs nothing; doing it after a failed install costs an afternoon.
 
@@ -127,9 +110,11 @@ one works.
 | Bootloader | GNU GRUB for `i386-efi` | Loads the Linux kernel and initramfs | USB discovery was unreliable; HFS+ loading from Macintosh HD worked |
 | Kernel bootstrap | `vmlinuz-linux` + `initramfs-linux.img` | Starts Linux and finds the live filesystem | Loaded from `/efi/omarchy`; needed `noefi nomodeset` |
 | Live environment | ArchLinux32 `archiso` | Provides the `root@archiso` shell used to install the target | Reached on the physical MacBook1,1 |
-| Package installer | `pacstrap`, `pacman`, `arch-chroot` | Builds the permanent ArchLinux32 system on the target partition | Not yet run on physical hardware |
-| Omarchy32 payload | This repository plus pinned i686 packages/stack | Adds the CPU-rendered compositor, shell, configuration and hardware fixes | Payload hashes passed; installed desktop remains untested on hardware |
-| Installed bootloader | GRUB `i386-efi` at `EFI/BOOT/BOOTIA32.EFI` | Boots the finished internal system without rEFIt | VM-rehearsed only; preserve rEFIt until cold-boot proven |
+| Package installer | `pacstrap`, `pacman`, `arch-chroot` | Builds the permanent ArchLinux32 system on the target partition | Completed on the physical machine; package closure needed two later repairs |
+| Omarchy32 payload | This repository plus pinned i686 packages/stack | Adds the CPU-rendered compositor, shell, configuration and hardware fixes | Hyprland, Quickshell, display, keyboard, pointer motion, Wi-Fi, and SSH work on hardware |
+| Login | greetd + tuigreet | Authenticates on a TTY, then launches the Omarchy session | greetd and the graphical session are active; a TTY remains the recovery path |
+| Input | kernel evdev + libinput + Hyprland | Converts appletouch and keyboard events into desktop input | Motion works; effective one-button quirk proven; physical click recording remains open |
+| Installed bootloader | GRUB `i386-efi` at `EFI/BOOT/BOOTIA32.EFI` | Boots the finished internal system | Installed system is running; retain the verified external recovery route until repeated cold boots are recorded |
 
 The verified installation-media chain is therefore:
 
@@ -406,9 +391,7 @@ What lands where:
 - `/usr/bin/quickshell` and `/usr/lib/qt6/qml`: the shell, beside the distro
   Qt. Configured with `-DCMAKE_INSTALL_PREFIX=/usr` so the QML modules land
   where archlinux32's Qt looks for them.
-- `/usr/lib/libinput.so.10.13.0`: **libinput 1.29, over the repo's 1.27.**
-  Hyprland 0.56 needs the newer API and archlinux32 has not got it. This is the
-  one file in the tarball that shadows a package.
+- `/usr/lib/libinput.so.10.13.0`: the stack's original **libinput 1.29.0, over the repo's 1.27.** Hyprland 0.56 needs the newer API and archlinux32 has not got it. This unowned file is replaced by the packaged 1.29.1 physical baseline below.
 - `/etc/ld.so.conf.d/00-usrlocal.conf`, because archlinux32's `ld.so` does not
   search `/usr/local/lib` by default. Run `ldconfig` after extracting or
   nothing links.
@@ -424,10 +407,35 @@ arch-chroot /mnt quickshell --version    # Quickshell 0.3.1 ... distributed by o
 A non-zero count on `Hyprland` naming `FcConfigSetDefaultSubstitute` means step
 6 did not take.
 
-Because the tarball shadows `libinput`, and because Quickshell links private Qt
-APIs and dies on an ABI mismatch, the fork's `pacman.conf` (installed in step 8)
-carries `IgnorePkg = libinput qt6-base qt6-declarative`. Unpin them only when
-you are ready to reinstall the stack.
+Now install the two rebuilt packages that complete the tested physical closure. They are deliberately installed **after** extracting the stack so pacman owns and replaces the tarball's libinput library. Copy both files from the validated Mac's pacman cache to `/mnt/root` first; do not continue from a fresh install if those exact artifacts are unavailable.
+
+```bash
+cat > /mnt/root/physical-overrides.sha256 <<'EOF'
+0c0da2a57be39c13841449caa7a8217c596e3cfb13a731a6f55a82749df2201b  libinput-1.29.1-1.1-pentium4.pkg.tar.zst
+dcb02727a8e3ce658c1716d1a483969bb088fd06f040a385b4ed149396e46130  dconf-0.49.0-1.1-pentium4.pkg.tar.zst
+EOF
+arch-chroot /mnt bash -c 'cd /root && sha256sum -c physical-overrides.sha256'
+arch-chroot /mnt pacman -U --noconfirm \
+  /root/libinput-1.29.1-1.1-pentium4.pkg.tar.zst \
+  /root/dconf-0.49.0-1.1-pentium4.pkg.tar.zst
+arch-chroot /mnt ldconfig
+arch-chroot /mnt pacman -Q libinput dconf glib2
+arch-chroot /mnt pacman -Qkk libinput dconf
+arch-chroot /mnt ldd -r /usr/local/bin/Hyprland | grep -c 'undefined symbol'  # want 0
+```
+
+The final package lines should report libinput `1.29.1-1.1`, dconf `0.49.0-1.1`, glib2 `2.80.0-2.0`, and zero altered files. The dconf service cannot be meaningfully exercised inside the chroot. After the first login, test its actual D-Bus write/read/reset path:
+
+```bash
+dbus-run-session sh -c '
+  gsettings set org.gnome.desktop.interface color-scheme prefer-dark
+  gsettings get org.gnome.desktop.interface color-scheme
+  gsettings reset org.gnome.desktop.interface color-scheme'
+```
+
+The middle line must print `'prefer-dark'`; an undefined symbol or connection failure means this closure is not intact.
+
+Because Quickshell links private Qt APIs and dies on an ABI mismatch, the fork's `pacman.conf` installed in step 8 carries `IgnorePkg = libinput qt6-base qt6-declarative`. Unpin them only when the replacement package set and desktop stack have been rebuilt and tested together.
 
 ### 8. The repo, the user, and the system stage
 
@@ -436,8 +444,8 @@ git clone https://github.com/cederikdotcom/omarchy32cpu /mnt/usr/share/omarchy
 
 # Prove you have the validated runtime tree before anything runs from it.
 git -C /mnt/usr/share/omarchy rev-parse HEAD                                   # record this
-git -C /mnt/usr/share/omarchy merge-base --is-ancestor 2f1378cc HEAD && echo ok
-git -C /mnt/usr/share/omarchy diff --stat 2f1378cc HEAD                        # docs/ only
+git -C /mnt/usr/share/omarchy merge-base --is-ancestor 21d1f16c HEAD && echo ok
+git -C /mnt/usr/share/omarchy diff --stat 21d1f16c HEAD                        # review all runtime paths
 
 arch-chroot /mnt useradd -m -G wheel -s /bin/bash <user>
 arch-chroot /mnt passwd <user>
@@ -449,7 +457,7 @@ path into it.
 
 `main` contains the merged integration and is the checkout used for the hardware
 session. Record its exact commit before running the system stage. If it no
-longer contains runtime pin `2f1378cc`, or the diff from that pin includes
+longer contains physical baseline `21d1f16c`, or the diff from that pin includes
 unexpected runtime paths, stop and reassess rather than silently testing a
 different stack.
 
@@ -458,11 +466,9 @@ and post-install, and logs to `/var/log/omarchy-install.log`. It takes about
 three seconds. The hardware scripts are all guarded and skip themselves on
 machines they do not match; the Apple ones will fire on the MacBook.
 
-ufw comes up enforcing deny-incoming, and you **can** add rules here.
-`arch-chroot /mnt ufw allow 22/tcp` prints `ERROR: problem running` and exits
-1, because it cannot load the rule into the kernel from a chroot, but it does
-write the rule to `/etc/ufw/user.rules` and the rule is live after the reboot.
-Check `grep 22 /mnt/etc/ufw/user.rules`, not the exit code.
+ufw comes up enforcing deny-incoming. Establish key-only SSH, persist its allow rule, and keep `tty2` or the live medium available before letting setup change the firewall. The VM gate proved that a UFW reload can cut the active SSH control path and hide the later failure. Run firewall mutation late and confirm the saved rule before enabling it.
+
+`arch-chroot /mnt ufw allow 22/tcp` prints `ERROR: problem running` and exits 1 because it cannot load the rule into the kernel from a chroot, but it does write the rule to `/etc/ufw/user.rules` and the rule is live after the reboot. Check `grep 22 /mnt/etc/ufw/user.rules`, not the exit code.
 
 ### 9. The user stage
 
@@ -540,7 +546,7 @@ arch-chroot /mnt
 | 4 keyring | Keyring half-built, later `pacman` calls fail on signatures | Yes | `rm -rf /mnt/etc/pacman.d/gnupg`, then re-run the three `pacman-key` commands |
 | 5 system files, initramfs | An initramfs that does not boot | Yes | `arch-chroot /mnt mkinitcpio -P` is idempotent. Before you regenerate a *working* one, `cp /mnt/boot/initramfs-linux.img /mnt/boot/initramfs-linux.img.bak`; if the new one dies, boot the USB, chroot and copy the backup back |
 | 6 overrides | Wrong or missing `fontconfig` | Yes | `pacman -U` is atomic: a failed one changed nothing. To go back to the repo version, `arch-chroot /mnt pacman -S fontconfig` |
-| 7 stack tarball | A half-extracted `/usr/local` | Yes | Re-extract the same tarball over the top and re-run `ldconfig`; tar overwrites. Then re-run both `ldd -r` checks - a zero from each is what says the extraction is whole. To undo the one file that shadows a package, `pacman -S libinput && ldconfig` |
+| 7 stack and physical override packages | A half-extracted `/usr/local`, or the stack's unowned libinput shadowing the package | Yes | Re-extract the same tarball, immediately reinstall the pinned libinput and dconf packages, and run `ldconfig`, `pacman -Qkk`, and both `ldd -r` checks. A zero undefined-symbol count and zero altered package files establish ownership and closure |
 | 8 `omarchy-apply-system` | **The dangerous one. See below** | Yes, and a re-run is cheap | Re-run the same command; the scripts are written to be re-runnable |
 | 9 user stage | A partly seeded `~/.config` | Yes | Re-run it; `--force` is what makes it overwrite |
 | 10 bootloader | A machine that will not boot | Yes | Boot the USB, chroot, run `omarchy-refresh-grub` again. Confirm `ls -la /mnt/boot/EFI/BOOT/BOOTIA32.EFI` before you reboot, every time |
@@ -595,7 +601,7 @@ Now, in order of likelihood:
 
 1. **The idle lock.** The session locks itself after 300 seconds idle, and this fork's lock screen is drawn by the shell as a flat theme-coloured fill. It looks exactly like a dead compositor. **Press a key first, before anything else.** This fork has no `swaylock` process to look for - the lock is inside Quickshell - so if you need to settle it from a TTY, `pgrep -x quickshell` and `pgrep -x Hyprland` both answering means the session is alive and you are looking at the locker. For an unattended run, turn idle off properly with `omarchy-toggle-idle stay-awake`. Do not kill the locker: killing a locker that holds the session lock leaves Hyprland on its "crashed lockscreen" page, which reads as a renderer failure and is not one. Clear that with `hyprctl eval "hl.clear_crashed_lockscreen()"`.
 
-2. **The ~1-in-5 login crash. Log in again.** Roughly one login in five on this stack ends with the compositor dying and greetd dropping you back on tuigreet. Log in a second time; it usually takes. This is expected and it is not what you are testing, so do not spend the session on it - **but count it**. How many attempts you needed out of how many logins is a number the project wants. The whole story, including what changed and what it does not prove, is in "The i686 login crash" below.
+2. **A historical intermittent login crash.** Log in once more to recover, but capture the journal, packages, and input event that preceded it. The old “roughly one in five” rate came from the VM-era stack and is not the current acceptance budget. The evidence and its corrected interpretation are in "The i686 login crash" below.
 
 3. **A login loop you cannot break out of.** greetd starts the session, the session dies, greetd offers the greeter, you log in, repeat. What makes it a loop rather than a crash is the second failure behind it: when the compositor dies, `start-hyprland` restarts it with `--safe-mode`, and the safe-mode dialog **segfaults** because it wants `hyprland-dialog` from `hyprland-qtutils`, which is not in archlinux32 and is not installed. So the recovery path is itself broken and the machine cannot help itself. Do not fight it from the greeter. Drop to `tty2` (or boot `systemd.unit=multi-user.target`), capture the logs, and then try the reduced config in "The i686 login crash". Log in there once first, so the journal has the failure in it.
 
@@ -616,9 +622,7 @@ Now, in order of likelihood:
 
 ## The i686 login crash
 
-Read this even though the desktop now comes up. The bug behind it is still in
-the renderer, and if you meet it on the hardware this section is what turns a
-dead login into a useful report.
+This is a historical reproducer and a current recovery guide. It does **not** prove that the renderer originated the corruption: the allocator detected damage on a renderer allocation, while later physical work found independent package and input defects. If a login fails now, this section turns it into a useful report without prematurely assigning the cause.
 
 On the rehearsal image, before the fix, it fired on every attempt: nine greetd
 logins and eight hand-started sessions, all of them.
@@ -680,15 +684,11 @@ keyboard that starts with numlock off, and the MacBook1,1 has no numpad.
 With the line off, **five cold boots out of five put the desktop on screen**,
 greetd's own autologin, no retries, nothing by hand.
 
-**The 2026-09-04 physical install found the remaining hardware-specific trigger.** The first real MacBook1,1 session reached the complete Omarchy desktop and then aborted after about five minutes of physical input; the next lasted 47 seconds. One core stopped in libinput while processing an out-of-range `appletouch` coordinate, and another stopped while Hyprland updated keyboard modifier state. Both exposed the same heap corruption rather than two independent crashes. Leaving `numlock_by_default` off was therefore necessary but not sufficient on the actual A1181.
+**The 2026-09-04 physical install invalidated the single-cause story.** The first real MacBook1,1 session reached the complete Omarchy desktop and then aborted after about five minutes of physical input; the next lasted 47 seconds. One core stopped in libinput while processing an out-of-range `appletouch` coordinate, and another stopped while Hyprland updated keyboard modifier state. Those crash sites directed the investigation toward the input and package closure; they did not prove a shared renderer defect.
 
 Skipping `default.hypr.input` only on DMI product `MacBook1,1` kept the rest of the Omarchy configuration intact: 207 bindings, the Quickshell panel and menu, theme, window rules and autostart all remained loaded. That session survived more than 30 minutes, synthetic and physical typing, and physical trackpad movement without another core. The installed `appletouch` driver initially enumerated without emitting events; unloading and reloading that one module initialized it in Geyser mode and restored movement without restarting Hyprland. The shipped guard now leaves this model on Hyprland's input defaults; every other model still receives Omarchy's input tuning.
 
-Two things this does not mean. It does not mean the renderer is fixed: the
-hand-start harness still lost about one start in five, visible in the 3/4, 5/6
-and 4/5 rows above, so **a login that lands on the greeter is possible**. Log in
-again. And it does not mean the trigger is understood: one config path reaches
-it every time and has been closed, that is all.
+The historical hand-start harness still matters because it proved that `numlock_by_default` was a deterministic trigger in that package/configuration set. Its 3/4, 5/6, and 4/5 results must not be projected onto the repaired physical baseline. A new crash is a new observation: count it, capture the exact packages and input events, and keep renderer, input, and ABI hypotheses open until a controlled reproducer separates them.
 
 If you turn `numlock_by_default` back on, this comes back. Do not.
 
@@ -738,7 +738,7 @@ Two kinds of work are mixed together in a hardware session, and keeping them apa
 - **Type** - commands, printed verbatim below. Their output can be copied, pasted and argued over a week later, and the capture in the next section collects most of them for you without you having to think about it.
 - **Observe** - what the panel, the fan, the keyboard and the clock actually do. No log recovers these afterwards. No command substitutes for them. They are the whole reason a VM could not settle this question. Write them down in words as you go, even when the answer is "yes, fine" - especially then, because "yes, fine" is the result nobody has ever recorded for this machine.
 
-The single sentence the project most wants out of this session is an observation and not a command: **did the panel light up and show a desktop drawn entirely by the CPU.**
+The panel question now has a recorded **yes**. The highest-priority observation in the next session is whether the separate physical button produces left-click with no finger and right-click with two fingers.
 
 ### The session in one table
 
@@ -747,7 +747,8 @@ The single sentence the project most wants out of this session is an observation
 | Does the GMA 950 scan out with dumb buffers | `hyprctl monitors`, `dmesg \| grep -i i915` | Whether there is a **picture on the panel at all**, and whether it is right rather than torn, striped, shifted, half-drawn or stuck |
 | Does the panel light up | nothing | The backlight, with your eyes. There is no command for this and it is not the same question as the one above |
 | Is the desktop usable on a 2006 Core Duo | `Super+Return`, `Super+Space`, on the real keyboard | Whether the terminal and the menu appear, and **how many seconds** they take. Slow is a result; unusable is a different result |
-| Wifi (ath5k) | `ip link`, `nmtui` | Whether the link is still up ten idle minutes later |
+| Built-in input | `libinput quirks list`, then hands-on presses | Whether motion, a no-finger physical press, and a two-finger physical press become pointer motion, left-click, and right-click respectively |
+| Wi-Fi (ath5k) | `ip link`, `nmtui` | Whether the link is still up ten idle minutes later |
 | Suspend and resume | `systemctl suspend`, and separately the lid | Whether the panel, the keyboard, the trackpad and wifi each come back |
 | Brightness keys | `brightnessctl -l`, `brightnessctl set 50%` | Whether the screen visibly changes, and whether the `XF86MonBrightness` keys do it too |
 | Fan control | `sensors` | Whether the fan **audibly** spins up under load, and whether the case becomes too hot to keep a hand on |
@@ -767,7 +768,8 @@ ls -l /dev/dri/
 dmesg | grep -iE 'i915|drm' | head -40
 free -m
 swapon --show
-pacman -Q fontconfig neatvnc icu75 libxml2-legacy qt6-base qt6-imageformats libvips
+pacman -Q fontconfig neatvnc icu75 libxml2-legacy qt6-base qt6-imageformats libvips libinput dconf glib2
+pacman -Qkk libinput dconf
 git -C /usr/share/omarchy rev-parse HEAD
 ```
 
@@ -778,7 +780,7 @@ Two things in that output decide whether anything else you measure means anythin
 
 ### 1. Does the GMA 950 scan out at all (the big one)
 
-This is the single largest unknown in the whole port. The pixman renderer asks aquamarine for **DRM dumb buffers** (`AQ_FORCE_ALLOCATOR=dumb`) and writes pixels into them with the CPU. That needs the i915 KMS driver to accept a dumb buffer as a scanout framebuffer on an i945GM. It is a plain, old, well supported path, and it has never once been run.
+This was the single largest unknown in the port, and the physical Mac has now answered it: the GMA 950 scans out Hyprland's CPU-rendered desktop through DRM dumb buffers on the built-in panel. Repeat these checks after installer, kernel, compositor, or boot changes because none of the lower validation layers can preserve that proof for a new build.
 
 **Type:**
 
@@ -824,7 +826,38 @@ omarchy-theme-set "Tokyo Night"
 
 Expected noise you should **not** report: every theme switch prints `Error accessing /usr/bin/omarchy-theme-set-browser-policy: No such file or directory`. That is a known fork-layout defect - the helper is elevated through `/usr/bin`, which a fork that ships no package does not have. Only the Chromium accent colour is lost; the theme switch itself completes.
 
-### 3. Wifi (ath5k)
+### 3. Built-in keyboard, trackpad, and separate button
+
+This MacBook does not have a modern diving-board clickpad. Its appletouch surface and physical button are separate, while the kernel exposes that button as one `BTN_LEFT` capability. libinput must classify USB product `05ac:0217` as Apple's pre-2008 one-button model so that a press with no finger maps to left-click and a press with two fingers maps to right-click.
+
+**Type:**
+
+```bash
+grep -A12 -B2 -i appletouch /proc/bus/input/devices
+event=$(awk 'BEGIN{RS=""} /appletouch/ && match($0,/event[0-9]+/){print substr($0,RSTART,RLENGTH); exit}' /proc/bus/input/devices)
+printf 'event=%s\n' "$event"
+libinput quirks validate
+libinput quirks list "/dev/input/$event"
+libinput list-devices | sed -n '/appletouch/,+24p'
+sudo timeout 30s libinput debug-events --device "/dev/input/$event"
+```
+
+**Working looks like:** the effective quirks include both `ModelAppleTouchpad=1` and `ModelAppleTouchpadOneButton=1`, motion events appear, a physical press with no finger focuses or activates the target under the pointer, and a two-finger physical press opens its context action. The local rule must be at the reserved path `/etc/libinput/local-overrides.quirks`; an arbitrary `.quirks` filename in that directory is ignored.
+
+Use the 30-second event capture for a deliberate sequence: move, no-finger button press, then two fingers on the surface plus button press. Write down which physical action produced which event and desktop result. The earlier zero-event capture proved nothing because no one touched the device during its window. Synthetic ydotool clicks already focused two exact temporary windows, so a physical failure now belongs below the compositor dispatch layer until evidence says otherwise.
+
+**If motion is intermittent or no events appear:** verify that the device still exists, then reload only its driver and wait for udev:
+
+```bash
+sudo modprobe -r appletouch
+sudo modprobe appletouch
+sudo udevadm settle
+dmesg | tail -60 | grep -iE 'appletouch|Geyser'
+```
+
+The known recovery logs Geyser-mode initialization and re-adds the device without restarting Hyprland. Do not reload the whole USB or input stack. If clicks still fail while raw button events are present, capture the libinput event sequence and Hyprland journal together.
+
+### 4. Wi-Fi (ath5k)
 
 The AR5BXB63 is in-tree. No firmware install should be needed.
 
@@ -842,7 +875,7 @@ grep -r . /etc/NetworkManager/conf.d/ath5k-no-powersave.conf
 
 **If it does not:** `dmesg | grep -i ath5k`, `nmcli device status`, `journalctl -b -u NetworkManager | tail -60`.
 
-### 4. Fan control (mbpfan)
+### 5. Fan control (mbpfan)
 
 **Not installed, and it cannot be.** mbpfan is not in the archlinux32 repos and the fork has no package for it yet; `fix-a1181.sh` skips it and says so. The MacBook runs on the firmware's own fan curve, which on this model is lazy.
 
@@ -856,7 +889,7 @@ sensors            # applesmc; lm_sensors arrives as a mesa dependency
 
 **If it climbs past 85 C on an ordinary workload**, say so with the number. A fan daemon then moves from the "nice to have" list to the "must package" list.
 
-### 5. iSight webcam
+### 6. iSight webcam
 
 **Expected absent.** It needs a firmware blob Apple does not allow us to redistribute, and `isight-firmware-tools` is not in archlinux32 either.
 
@@ -864,7 +897,7 @@ sensors            # applesmc; lm_sensors arrives as a mesa dependency
 
 **Working looks like:** nothing. An empty result is the expected answer and is not a bug. If you want the camera, extract `AppleUSBVideoSupport` from a macOS install with `ift-extract` on another machine and reload `uvcvideo`.
 
-### 6. Brightness keys
+### 7. Brightness keys
 
 `brightnessctl` is in the core package list.
 
@@ -881,7 +914,7 @@ brightnessctl set 50%
 
 **Observe:** these are two independent results. The backlight can work while the keys do nothing, and that is a keybinding question rather than a hardware one. Report which device name you got, or that there was none. On this generation the backlight is driven through `acpi_video` or the `gmux`/`apple_bl` path, and either can be missing.
 
-### 7. Suspend and resume
+### 8. Suspend and resume
 
 This is where an old Intel graphics stack usually breaks: the machine sleeps and comes back with a dead panel because the KMS driver failed to restore the mode. Test the lid and the command separately; they are not the same path.
 
@@ -899,13 +932,13 @@ journalctl -b -k | grep -iE 'i915|drm' | tail -40
 
 **If it does not:** if the panel is dead but the machine is alive, get in over ssh or `Ctrl+Alt+F2` and capture the kernel log above; the failure will be in the `i915` lines around the resume.
 
-### 8. Battery
+### 9. Battery
 
 **Type:** `upower -i $(upower -e | grep BAT)`
 
 **Observe:** what the bar shows. A 2006 battery is very likely dead, and "reports 0% / not present / charges but does not hold" are all fine answers. Say which.
 
-### 9. Audio
+### 10. Audio
 
 pipewire on archlinux32 is 0.3.65, which is old. Quickshell's pipewire service is compiled against it after a two-line patch, so the audio panel, the volume OSD and the media widgets are present rather than absent. **Whether the service actually talks to a 0.3.65 daemon has never been tested against a running daemon**, and this is the best chance anyone has had to find out.
 
@@ -948,7 +981,10 @@ out=/tmp/omarchy-report-$(date +%Y%m%d-%H%M%S).txt
   echo "### env";           tr '\0' '\n' < /proc/$(pgrep -x Hyprland)/environ 2>/dev/null | grep -E 'HYPRLAND_|AQ_|QT_QUICK|XDG_|WAYLAND'
   echo "### systeminfo";    hyprctl systeminfo 2>&1 | head -40
   echo "### memory";        free -m; swapon --show
-  echo "### packages";      pacman -Q fontconfig neatvnc icu75 libxml2-legacy qt6-base qt6-imageformats libvips
+  echo "### packages";      pacman -Q fontconfig neatvnc icu75 libxml2-legacy qt6-base qt6-imageformats libvips libinput dconf glib2
+  echo "### package files"; pacman -Qkk libinput dconf
+  echo "### input devices"; grep -A12 -B2 -i appletouch /proc/bus/input/devices
+  echo "### input quirks";  libinput quirks validate; for event in /dev/input/event*; do libinput quirks list "$event" 2>/dev/null | grep -q 'ModelAppleTouchpad' && { echo "$event"; libinput quirks list "$event"; }; done
   echo "### quickshell";    quickshell --version
   echo "### hyprland ldd";  ldd -r /usr/local/bin/Hyprland 2>&1 | grep 'undefined symbol'
   echo "### crash reports"; ls -la ~/.cache/hyprland/ 2>/dev/null
@@ -993,7 +1029,7 @@ File it with the [hardware report form](https://github.com/cederikdotcom/omarchy
 
 ## Memory: the 2 GB question is answered
 
-Measured in the i686 VM held at 2048 MB, the MacBook's size, at 1280x800, **at commit `0faf8483` - before this integration, when the backgrounds were still JPEG and PNG**. The decoded size of an image does not depend on the container it was stored in, so the arithmetic below should carry over unchanged to the `.webp` originals. Should. Nobody has measured it on i686, and on x86_64 the shell measured 266 MB RSS holding the 6016x3384 WebP default against the 234 MB recorded the day before on the same VM with the JPEG-era default - close, but not the same number, and not measured under controls tight enough to say why. Re-measuring `free -m` and the shell's RSS on the hardware is cheap and is worth doing.
+Measured in the i686 VM held at 2048 MB, the MacBook's size, at 1280x800, **at commit `0faf8483` - before this integration, when the backgrounds were still JPEG and PNG**. The decoded size of an image does not depend on the container it was stored in, so the arithmetic below should carry over unchanged to the `.webp` originals. Should. The physical i686 machine now runs the desktop, but a controlled hardware RSS series has not been recorded. On x86_64 the shell measured 266 MB RSS holding the 6016x3384 WebP default against the 234 MB recorded the day before on the same VM with the JPEG-era default - close, but not the same number, and not measured under controls tight enough to say why. Re-measuring `free -m` and the shell's RSS on the hardware is cheap and is worth doing.
 
 | | Quickshell RSS | system in use | left for apps |
 |---|---|---|---|

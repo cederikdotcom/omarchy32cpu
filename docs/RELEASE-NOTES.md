@@ -4,10 +4,7 @@
 archlinux32 i686. Based on upstream Omarchy v4.0.1 "Quattro". First
 target hardware: 2006 Apple MacBook1,1 (A1181, EMC 2092).
 
-Status: pre-release, mid-migration. Everything below reflects the state
-validated on the cloud test bench on 2026-08-30, plus the x86_64
-bring-up on 2026-08-31. The port has not yet touched the real MacBook,
-or any real hardware at all.
+Status: pre-release, now running on the physical MacBook1,1. This is a chronological record, so early sections intentionally retain conclusions that were true at that point in the investigation. The physical baseline below supersedes later historical phrases such as “never run on real hardware” and the early attribution of all login failures to the renderer.
 
 **The compositor changed after those validations.** See "Hyprland
 replaces sway" immediately below: every session-level result recorded
@@ -21,13 +18,24 @@ against a `-vga std` framebuffer with no GPU. The Quickshell bar, the
 Omarchy menu on `Super+Space`, the shell's own wallpaper, its
 notifications and live theme switching all work, and the shell's process
 maps no Mesa driver and holds no `/dev/dri` descriptor. Screenshot:
-`docs/pixman-renderer/x86_64-hyprland.png`. The i686 session is the same
-exercise on the harder architecture and has not been run yet; nothing
-below about i686 or real hardware has changed.
+`docs/pixman-renderer/x86_64-hyprland.png`. At that point the i686 session had not yet run; the next section records the later physical result.
 
-The CPU-only core is architecture-independent, and x86_64 is where most
-testing will happen: see `TESTING.md` and
-`docs/runbooks/install-x86_64.md`.
+The CPU-only core is architecture-independent, and x86_64 remains the fast regression environment. Physical MacBook1,1 acceptance is separate: see `TESTING.md`, `docs/runbooks/a1181-install.md`, and `docs/history/a1181-port-lessons.md`.
+
+## Physical MacBook1,1 baseline and corrected record (2026-09-04 to 2026-09-05)
+
+The installed ArchLinux32 system now runs the real Omarchy desktop on the early-2006 MacBook1,1. The validated machine reports Linux `6.19.11-arch1-1.0` i686 and repository commit `21d1f16ca36c37ae25a32dcba24484be7a5e9d32`. greetd launches Hyprland 0.56.2 on the pixman renderer; Quickshell runs through Qt's software scenegraph; the built-in 1280x800 panel, keyboard, pointer motion, ath5k Wi-Fi, and key-only SSH work. Manual credential entry through tuigreet remains an acceptance check because the observed login interaction did not behave reliably.
+
+Physical bring-up exposed defects that the chroot and VMs could not model:
+
+- The stack tarball's unowned libinput library shadowed pacman's libinput, while archlinux32's dconf package was incompatible with the installed glib2. The repaired baseline uses libinput `1.29.1-1.1`, dconf `0.49.0-1.1`, and glib2 `2.80.0-2.0`; both rebuilt packages pass `pacman -Qkk`.
+- The internal appletouch USB product is `05ac:0217`. The kernel exposes a single physical `BTN_LEFT`, but libinput 1.29 omitted this product from its pre-2008 one-button Apple model list and treated it as a clickpad. The hardware setup now writes `ModelAppleTouchpadOneButton=1` to the reserved `/etc/libinput/local-overrides.quirks` path.
+- Trackpad enumeration has intermittently required reloading only the `appletouch` module. The successful reload initialized Geyser mode and restored motion without restarting Hyprland.
+- Synthetic pointer movement and left-clicks focused two exact temporary windows, proving the compositor dispatch path. The remaining input gate is a recorded physical press with no finger for left-click and two fingers plus the separate button for right-click.
+
+The locally rebuilt artifacts are not yet public release assets. The validated cache files are `libinput-1.29.1-1.1-pentium4.pkg.tar.zst` with SHA-256 `0c0da2a57be39c13841449caa7a8217c596e3cfb13a731a6f55a82749df2201b`, and `dconf-0.49.0-1.1-pentium4.pkg.tar.zst` with SHA-256 `dcb02727a8e3ce658c1716d1a483969bb088fd06f040a385b4ed149396e46130`. Until signed packages and PKGBUILDs are published, release `i686-20260902` is not by itself a reproducible fresh-install baseline.
+
+The corrected chronology, validation ladder, discarded architecture choices, SSH/firewall failure, packaging lessons, and recovery requirements are preserved in [`history/a1181-port-lessons.md`](history/a1181-port-lessons.md). The current procedure is [`runbooks/a1181-install.md`](runbooks/a1181-install.md).
 
 ## What this release is
 
@@ -393,7 +401,7 @@ wayland-protocols patch; on a 2006 Core Duo that is a day of compiling
 before the first login attempt. The recipe stays in the runbook for
 anyone who wants it.
 
-### The i686 login crash, bisected to one config line (2026-09-02)
+### Historical: the i686 login crash bisected to one config line (2026-09-02)
 
 **greetd now puts you on the i686 desktop.** Screenshot, taken from the
 QEMU display of a fresh install built by the runbook and started by
@@ -426,17 +434,11 @@ backtrace anyone took pointed at the renderer and none of them pointed
 here. `default/hypr/input.lua` now ships it off. The cost is a keyboard
 that starts with numlock off, on a machine with no numpad.
 
-**The renderer bug is not fixed**, only kept out of the one path that
-reached it every time. The 3/4, 5/6 and 4/5 rows are the residue: about
-one start in five still dies, so an occasional login that lands on the
-greeter is expected and a second login gets you in. Fixing the renderer
-properly is still the next job, and the sites named below are still the
-places to look. The five clean cold boots say the greetd path is usable,
-not that the bug is gone.
+At the time, those results were interpreted as an unfixed renderer bug: the 3/4, 5/6, and 4/5 rows looked like a one-in-five residue. The physical investigation later found independent dconf/glib, libinput ownership, and device-classification defects. The table remains a valid reproducer for the VM-era package/configuration set, but its root-cause claim and rate are superseded by the physical baseline at the top of this file.
 
-### What is still broken on i686
+### Historical VM-era failure signature
 
-**The session crashes on about one login in five.**
+**In that package/configuration set, the session crashed on about one login in five.**
 Started by greetd, the compositor and the shell both come up and then
 Hyprland aborts with `malloc(): invalid size (unsorted)`. It is heap
 corruption, so glibc reports it at whatever allocates next and the site
@@ -544,12 +546,11 @@ One more recipe note: the i686 build was configured with
 leaves the prefix at cmake's `/usr/local` default and works, so this is
 the tested layout rather than a proven requirement.
 
-**Still never run on real hardware.** Every figure above is a QEMU VM
-with an emulated framebuffer. The MacBook has a GMA 950 and a slower
-Core Duo, so expect the timings to differ even where the megabytes do
-not.
+**At this point in the chronology it had still never run on real hardware.** Every figure in this dated section came from a QEMU VM with an emulated framebuffer. The later physical baseline at the top of this file supersedes the hardware-status conclusion, but not the provenance of these measurements.
 
 ### The i686 artifacts are published (2026-09-02)
+
+Historical release status: these were all of the known inputs on 2026-09-02. Physical bring-up later added rebuilt libinput and dconf packages that are not published, so this asset set alone is no longer the complete tested baseline.
 
 Everything the A1181 runbook downloads now exists, on one release:
 https://github.com/cederikdotcom/omarchy32cpu/releases/tag/i686-20260902
@@ -823,15 +824,10 @@ archlinux32 databases were also a week old at the time of the check.
 
 ### Blocking a real MacBook install
 
-- **Fork package repo does not exist yet.** The two overrides -
-  fontconfig 2:2.18.3 (mandatory: the desktop's text stack will not
-  start without it) and
-  neatvnc 0.8.1 (needed by wayvnc remote view) - are published as
+- **Fork package repo does not exist yet.** The original two overrides - fontconfig 2:2.18.3 (mandatory: the desktop's text stack will not start without it) and neatvnc 0.8.1 (needed by wayvnc remote view) - are published as
   GitHub release assets and installed with `pacman -U` per the runbook:
   https://github.com/cederikdotcom/omarchy32cpu/releases/tag/i686-20260902
-  That is a stopgap, not a repo. Future i686 rebuilds (mbpfan,
-  isight-firmware-tools, drift fixes) still want a real hosted pacman
-  repo wired into default/pacman/*.conf.
+  Physical bring-up added rebuilt libinput 1.29.1 and dconf 0.49.0 packages, neither of which is published. That is now a fresh-install reproducibility blocker, not merely future polish. Signed packages, PKGBUILDs, and a hosted pacman repository wired into `default/pacman/*.conf` remain required; mbpfan, isight-firmware-tools, and later drift fixes belong there too.
 - **Two components are in no repo, and on x86_64 every tester still
   builds them.** This is the largest remaining install-friction item:
   1. **Hyprland + aquamarine** (this fork's branches), because the pixman
@@ -858,9 +854,7 @@ archlinux32 databases were also a week old at the time of the check.
   populate, locale/vconsole/hostname/fstab, initramfs MODULES
   (ahci sd_mod i915 on the Mac), user creation. An IA32-bootable
   custom ISO is a later milestone.
-- **GMA 950 render floor untested.** the pixman renderer is proven on
-  i686 in QEMU, but the real i945 KMS path needs the on-hardware spike
-  (worklist 14). i3/X11 with the modesetting driver is the fallback.
+- **GMA 950 render floor proven; full hardware acceptance remains open.** The physical i945 KMS path scans out the pixman-rendered Hyprland/Quickshell desktop on the built-in panel. Physical button mapping, audio, brightness keys, thermals, battery behavior, and suspend/resume still need recorded hands-on results. i3/X11 with the modesetting driver remains the recovery fallback.
 - **mbpfan and isight-firmware-tools** are not in archlinux32 repos;
   they must be built for the fork repo. Until then: no fan management
   daemon, no webcam. `install/hardware/apple/fix-a1181.sh` skips them

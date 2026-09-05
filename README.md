@@ -5,17 +5,11 @@ workspaces, keybindings, the 24-color theme engine, the menu system
 and the CLI tooling - with no GPU dependence at all and no
 preinstalled applications. Every pixel is drawn by the CPU.
 
-It runs where stock Omarchy cannot: VMs without GPU passthrough,
-cloud desktops, thin clients, and old hardware. The first and most
-hostile target: **archlinux32 i686 on the 2006 Apple MacBook A1181**
-(32-bit Core Duo, GMA 950, 32-bit Apple EFI). This branch is based on
-upstream Omarchy v4.0.1 "Quattro".
+It runs where stock Omarchy cannot: VMs without GPU passthrough, cloud desktops, thin clients, and old hardware. The first and most hostile target is **archlinux32 i686 on the 2006 Apple MacBook A1181** (32-bit Core Duo, GMA 950, 32-bit Apple EFI). The port began on upstream Omarchy v4.0.1 "Quattro" and now integrates the current `upstream/quattro` history.
 
 ## Try it
 
-This is pre-release software that has never run on real hardware. It is
-looking for testers, and **a hardware report is the most useful thing
-you can send** - what your machine is, and what did or did not come up.
+This is pre-release software. It now boots and runs the real Omarchy desktop on its physical MacBook1,1 target, but several hardware acceptance checks remain open. **A hardware report is still the most useful thing you can send** - what your machine is, what worked, and the exact point where it did not.
 
 1. **Look at it first**, in a browser, no install:
    [omarchy32.cederik.com/vnc.html](https://omarchy32.cederik.com/vnc.html),
@@ -97,17 +91,11 @@ number that moves is the wallpaper, not the plugin set: shell RSS is
 about `135 MB + the decoded background`, which spans 144 MB to 272 MB
 across the wallpapers this repo ships.
 
-Two things are **not** settled, and a tester should expect both:
+The physical MacBook1,1 crossed the hardware boundary on 2026-09-04 and 2026-09-05. Apple EFI32 reached the ArchLinux32 live system through the documented rEFIt/split-GRUB bootstrap; the installed system then drove the built-in 1280x800 LVDS panel with the GMA 950, started greetd, Hyprland's pixman renderer, and the upstream Quickshell desktop, and remained reachable over ath5k Wi-Fi and key-only SSH. The built-in keyboard and pointer motion work. A compositor-level synthetic test also moved the cursor and focused two different windows with clicks.
 
-- **About one login in five crashes the compositor** on i686. It is heap
-  corruption on the DRM page-flip path, and the fork has not fixed it -
-  it has only kept it out of the config line that used to reach it on
-  every single login. Log in again and you get in. Details in
-  [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md).
-- **Nothing has run on real hardware**, on either architecture. Every
-  figure above is a QEMU VM with an emulated framebuffer. The physical
-  MacBook's GMA 950 render floor is the open hardware question, and no
-  real x86_64 machine has been tried either.
+The remaining input gate is physical button confirmation after the new libinput quirk. The internal `05ac:0217` device exposes one physical `BTN_LEFT` signal, but libinput did not classify this product as Apple's pre-2008 one-button model. The live machine now loads `ModelAppleTouchpadOneButton=1`; left-click and two-finger right-click still need a recorded hands-on pass. Trackpad enumeration has also intermittently required reloading `appletouch`, which reinitializes Geyser mode without restarting Hyprland.
+
+The earlier “about one login in five” result remains useful historical evidence from the VM-era stack, but it is no longer an adequate description of the current machine. Later work found independently demonstrable package and input defects, including incompatible dconf/glib components, a libinput library shadowed by the stack tarball, and the missing `05ac:0217` quirk. The safe A1181 input configuration remains in place until the rebuilt package closure and physical input have been revalidated together. See [`docs/history/a1181-port-lessons.md`](docs/history/a1181-port-lessons.md) for the corrected chronology.
 
 ## Documentation
 
@@ -119,6 +107,7 @@ Two things are **not** settled, and a tester should expect both:
   (screen sharing, animations, shader effects)
 - [`docs/a1181-gap-analysis.md`](docs/a1181-gap-analysis.md) - the
   verified gap matrix and the worklist that drove the port
+- [`docs/history/a1181-port-lessons.md`](docs/history/a1181-port-lessons.md) - the historical record: incorrect assumptions, validation layers, measurement corrections, physical findings, and installer requirements
 - [`docs/runbooks/install-x86_64.md`](docs/runbooks/install-x86_64.md) -
   the x86_64 quick start, plus the QEMU and cloud test targets
 - [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md) -
@@ -133,9 +122,7 @@ No screen sharing ever (pixman has no screencast path). No hardware
 video decode, no Vulkan, no animations or blur. Four `MultiEffect` uses
 in the shell render unembellished, because the software scenegraph has
 no shaders. Updates do not track
-upstream; on i686 the fork carries its own package overrides
-(fontconfig, neatvnc) because archlinux32 has real dependency drift -
-x86_64 needs neither. See the release notes for the full list.
+upstream; on i686 the fork carries package overrides because archlinux32 has real dependency and ABI drift. The physical baseline currently includes rebuilt fontconfig, neatvnc, libinput, and dconf components; the latter two are not yet published through a fork package repository. See the release notes and historical lessons for the exact status.
 
 ---
 

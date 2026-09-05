@@ -6,7 +6,9 @@
 > holds `greetd.sh` and `wayland-session.sh`, which install the greetd config and
 > drop `default/wayland-sessions/omarchy.desktop` into `/usr/share/wayland-sessions/`
 > rather than `/usr/local/share`. See [`docs/RELEASE-NOTES.md`](RELEASE-NOTES.md)
-> for what diverges and why.
+> for what diverges and why. The A1181 port's corrected chronology and
+> installation lessons live under [`docs/history/`](history/a1181-port-lessons.md),
+> which is repository documentation and is installed in neither package.
 
 How `omarchy/` is organized and where everything ends up on an installed
 system.

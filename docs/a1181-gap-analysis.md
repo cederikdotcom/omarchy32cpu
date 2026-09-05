@@ -5,7 +5,8 @@
 > Hyprland for sway - has been reversed: this fork now runs upstream
 > Hyprland on its own pixman renderer, and sway is deleted. Read it for the
 > reasoning and the hardware survey, not for what the fork ships. Current
-> state: `docs/RELEASE-NOTES.md`; renderer: `docs/pixman-renderer/`.
+> state: `docs/RELEASE-NOTES.md`; corrected port history and physical baseline:
+> `docs/history/a1181-port-lessons.md`; renderer: `docs/pixman-renderer/`.
 
 Identity: this fork is **Omarchy CPU** - the Omarchy experience with no
 GPU dependence at all, and no preinstalled applications. Every pixel is
