@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# Read-only package/linker gate for the physical i686 desktop.
+# Run after package transactions and after extracting a desktop stack.
+set -uo pipefail
+
+failed=0
+for package in libinput dconf libvips; do
+  if ! pacman -Q "$package" || ! pacman -Qkk "$package"; then
+    failed=1
+  fi
+done
+
+for binary in /usr/local/bin/Hyprland /usr/bin/quickshell /usr/bin/vipsthumbnail /usr/lib/dconf-service; do
+  if [[ ! -x $binary ]]; then
+    printf 'FAIL missing executable: %s\n' "$binary" >&2
+    failed=1
+    continue
+  fi
+
+  if ! linkage=$(ldd -r "$binary" 2>&1); then
+    printf 'FAIL linker check: %s\n%s\n' "$binary" "$linkage" >&2
+    failed=1
+  elif grep -Eq 'not found|undefined symbol' <<<"$linkage"; then
+    printf 'FAIL unresolved dependency: %s\n%s\n' "$binary" "$linkage" >&2
+    failed=1
+  else
+    printf 'PASS linker check: %s\n' "$binary"
+  fi
+done
+
+if ! libinput quirks validate; then
+  failed=1
+fi
+
+if (( failed )); then
+  printf 'Runtime dependency validation failed. Preserve the logs before changing packages.\n' >&2
+else
+  printf 'Runtime dependencies validated. Login, rendering, and physical input still require session tests.\n'
+fi
+exit "$failed"
