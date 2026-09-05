@@ -98,7 +98,8 @@
         "bin/omarchy-refresh-grub",
         "bin/omarchy-reinstall-configs",
         "default/omarchy/launcher.hides",
-        "test/shell.d/limine-cmdline-migration-test.sh"
+        "test/shell.d/limine-cmdline-migration-test.sh",
+        "test/shell.d/limine-defaults-test.sh"
       ],
       "handling": "bin/omarchy-refresh-grub installs GRUB into the removable fallback path (/boot/EFI/BOOT/BOOT*.EFI) with no NVRAM write, picking i386-efi or x86_64-efi from the GRUB platform modules actually installed rather than from uname -m, which lies inside a target chroot. The Limine configs, entry-tool drop-ins, UKI mkinitcpio preset and the Limine refresh command are gone, and bin/omarchy-reinstall-configs calls refresh-grub in their place.",
       "rationale": "Upstream boots a 64-bit UKI through Limine. The A1181's Apple EFI is 32-bit and can only load BOOTIA32.EFI, and there is no 32-bit Limine boot path. This one does not converge: it is a firmware constraint, not a packaging gap.",

@@ -71,6 +71,10 @@ jq -e --arg path "$ROOT/bin/omarchy-chromium-copy-url-host" '
 ' "$native_manifest" >/dev/null || fail "copy-url native host manifest uses Omarchy host path and extension id"
 pass "copy-url native host installer registers the stable extension id"
 
+[[ -f $test_home/.config/BraveSoftware/Brave-Origin/NativeMessagingHosts/com.omarchy.copy_url.json ]] ||
+  fail "copy-url native host installer covers Brave Origin"
+pass "copy-url native host installer covers Brave Origin"
+
 # Chromium is not in this fork's package set (archlinux32 carries only 90.0,
 # from 2021), so a fresh install never has it and the native host registers
 # through the optional omarchy-install-chromium-copy-url path covered above.
