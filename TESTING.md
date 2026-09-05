@@ -1,6 +1,6 @@
 # Testing omarchy32cpu
 
-This fork is pre-release. It has been validated in VMs and chroots and has never run on the physical MacBook1,1 it was built for, nor on any other real machine we know of. **The single most useful thing you can give this project is a hardware report** - one message saying what your machine is and what did or did not come up. That data does not exist yet.
+This fork is pre-release. It has been validated in chroots, EFI32 and x86_64 VMs, and the physical MacBook1,1 it was built for. The real machine now boots ArchLinux32, drives its GMA 950/LVDS panel, starts greetd, Hyprland/pixman, and Quickshell, and stays reachable over ath5k Wi-Fi and SSH. **The single most useful thing you can give this project is still a hardware report** - especially authentication, physical input, audio, suspend, battery, and thermal behavior.
 
 File it with the [hardware report form](https://github.com/cederikdotcom/omarchy32cpu/issues/new?template=hardware-report.yml).
 
@@ -18,11 +18,19 @@ Until now this fork substituted sway for Hyprland, because Hyprland needs GLES 3
 
 **"What works today" below no longer rests on the sway session: both architectures have been reproven on Hyprland + Quickshell.** On **x86_64**, on 2026-08-31 and again with the real Quickshell desktop on 2026-09-01: a VM installed from this tree boots, greetd starts the session itself, `hyprctl systeminfo` says `Renderer: pixman (software)`, and the Quickshell bar, the Omarchy menu on a real `Super+Space`, notifications and theme switching all work with Qt on its software scenegraph.
 
-**On i686 the greetd login works as of 2026-09-02.** A fresh image built by following [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md) literally boots under 32-bit UEFI at 2048 MB and greetd puts you on the desktop with no hand-holding: bar, tray, clock, theme wallpaper, foot on `Super+Return` and the Omarchy menu on `Super+Space`, `Renderer: pixman (software)` on `Backend: drm`, zero failed units, 491 MB of the 2 GB in use, and five cold boots out of five landing on the desktop. Screenshot: [`docs/pixman-renderer/i686-greetd-desktop.png`](docs/pixman-renderer/i686-greetd-desktop.png). That rehearsal was run at commit `0faf8483`, before the upstream integration: the backgrounds were still JPEG and PNG and `qt6-imageformats` was not in the package list, so **no i686 session has yet drawn one of the 79 WebP backgrounds this tree ships**. The whole image path is proven on x86_64 only.
+**On i686 the greetd login works as of 2026-09-02.** A fresh image built by following [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md) literally boots under 32-bit UEFI at 2048 MB and greetd puts you on the desktop with no hand-holding: bar, tray, clock, theme wallpaper, foot on `Super+Return` and the Omarchy menu on `Super+Space`, `Renderer: pixman (software)` on `Backend: drm`, zero failed units, 491 MB of the 2 GB in use, and five cold boots out of five landing on the desktop. Screenshot: [`docs/pixman-renderer/i686-greetd-desktop.png`](docs/pixman-renderer/i686-greetd-desktop.png). That rehearsal was run at commit `0faf8483`, before the upstream integration: its backgrounds were still JPEG and PNG and `qt6-imageformats` was not in the package list. Therefore its visual and memory measurements do not prove the current WebP image path on i686; repeat that path explicitly on the physical baseline.
 
-Until that day the same install crashed on **every** login. The cause was one line of configuration, `input:numlock_by_default`, which the fork now ships off: turning numlock on at startup makes Hyprland build a second xkb state per keyboard, and on i686 that path corrupts the heap, so the abort landed in a pixman region `realloc` and every backtrace pointed at the renderer. The bisect ran one setting per variant on a fresh install - the whole fork config died 0 of 5, that line alone died 0 of 4, and the whole config with it off came back 4 of 5. **The renderer bug itself is not fixed**: the hand-start harness still lost about one start in five, so a login that lands on the greeter is possible. Log in again. The full table is in the runbook under "The i686 login crash". Nothing on i686 has been proven on hardware.
+The VM-era install once crashed on **every** login. A one-setting-at-a-time bisect proved that `input:numlock_by_default` was sufficient to trigger the failure in that stack, so the fork still ships it off. The residual “about one start in five” result is historical evidence, not a current failure budget: physical work later found independent package and input defects that the VM did not model. Keep the safe setting, but do not report every allocator abort as a renderer root cause. Capture the exact package set, device event, and backtrace first. The full chronology is in [`docs/history/a1181-port-lessons.md`](docs/history/a1181-port-lessons.md).
 
 The renderer needs two environment variables, both set by `omarchy-hyprland-launch`: `HYPRLAND_RENDERER=pixman` picks the software renderer and `AQ_FORCE_ALLOCATOR=dumb` makes aquamarine allocate DRM dumb buffers. A stock Hyprland ignores both and then dies on the missing GLES 3.0, so the Hyprland and aquamarine binaries have to come from the fork build.
+
+### Physical MacBook1,1 baseline
+
+As of 2026-09-05, the target reports Linux `6.19.11-arch1-1.0` i686 and repository commit `21d1f16ca36c37ae25a32dcba24484be7a5e9d32`. greetd, sshd, and NetworkManager are active; Hyprland 0.56.2 and Quickshell run together; Wi-Fi is connected; and the internal `05ac:0217` appletouch device is present. The package baseline includes glib2 `2.80.0-2.0`, Qt `6.7.2`, rebuilt libinput `1.29.1-1.1`, and rebuilt dconf `0.49.0-1.1`.
+
+The current appletouch classification must include both `ModelAppleTouchpad=1` and `ModelAppleTouchpadOneButton=1`. The exact local quirk filename is `/etc/libinput/local-overrides.quirks`; libinput ignores arbitrary `.quirks` filenames placed beside it. Hyprland's click path has been proven with the root-only ydotool validation socket and two temporary windows. Physical left-click and two-finger right-click are still awaiting a captured hands-on pass.
+
+Use the validation ladder rather than promoting one kind of evidence into another: repository audit → i686 chroot → EFI32/2-GB VM → runtime VM through greetd → physical machine. A chroot proves package and linker behavior, a VM proves repeatable boot/session behavior, and only the physical machine proves Apple firmware, GMA 950, appletouch, ath5k, thermals, and suspend.
 
 ## The shell is Quickshell again
 
@@ -50,10 +58,10 @@ published as one i686 tarball,
 [release `i686-20260902`](https://github.com/cederikdotcom/omarchy32cpu/releases/tag/i686-20260902),
 and step 7 of
 [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md)
-extracts it. That release also carries the two override packages, and it
+extracts it. That release also carries the original fontconfig and neatvnc override packages, and it
 supersedes `overrides-i686-20260831` - take the new one; the old one's
 `neatvnc-0.8.1-3` cannot be installed at all. The build recipe is still
-in that runbook, at the end, for anyone who wants to rebuild it.
+in that runbook, at the end, for anyone who wants to rebuild it. The physical baseline additionally requires the unpublished libinput and dconf packages named in the runbook.
 
 If you are checking whether the CPU path is really being taken, this is
 the trap to know about: the variable is `QT_QUICK_BACKEND=software`.
@@ -114,20 +122,14 @@ fixed part of the shell is about 135 MB on 32-bit rather than 190 MB on
 260 MB free and never touched zram. The full series is in
 [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md).
 
-What is **not** settled on i686 is stability, not size: the compositor
-still aborts on heap corruption during its first frames about one start
-in five. The configuration line that made it every start is fixed. See
-"The i686 login crash" in the runbook.
+What remains unsettled on i686 is stability under the repaired package and physical-input baseline, not whether the 2 GB memory budget is feasible. The old VM stack aborted on heap corruption during some starts, and one configuration line made it deterministic; physical work later exposed separate input and ABI problems. Treat the historical counts as a reproducer, not a promised current rate. See "The i686 login crash" in the runbook.
 
 Worth knowing before you blame the software scenegraph for any of
 this: the same shell in the same VM with `QT_QUICK_BACKEND` unset,
 taking Qt's default path through llvmpipe, sits at 698 MB. CPU
 rendering is not what costs the memory here, it is what saves it.
 
-**Now measured on i686 too, and still never on real hardware.** A
-hardware report carrying these numbers is worth more than any further VM
-work. If RAM is tight on a 2 GB machine, the lever is the wallpaper, not
-the plugin set.
+**Now measured on i686 and booted on the physical target.** The controlled memory numbers still come from the VM, because the physical session has not repeated the same wallpaper series under the same instrumentation. A hardware report carrying those numbers is useful. If RAM is tight on a 2 GB machine, the first lever is the wallpaper, not the plugin set.
 
 ## What works today
 
@@ -146,7 +148,7 @@ Everything in this list is evidence-backed. The detail, including every bug foun
 
 The session locks itself after five minutes idle - the shell's own idle plugin, at its 300 s default - and until you press a key the lock screen can look like a dead display. On a VM you are watching over VNC, or a machine you left alone while reading this, that is indistinguishable from a crash; it cost us an afternoon once already. Press a key first. If you are running unattended tests longer than five minutes, disable the idle lock rather than killing the locker: killing a locker that holds the session lock leaves Hyprland on its "crashed lockscreen" page, which then reads as a renderer failure. Clear that state with `hyprctl eval "hl.clear_crashed_lockscreen()"`.
 
-What has **not** been proven: any real GPU, any real display panel, any real wifi/audio/battery/suspend hardware, and any x86_64 machine. That is the entire point of this document.
+What has **not** been proven on the physical target: recorded physical button events after the one-button quirk, reliable appletouch enumeration across cold boots and resume, audio output/OSD, battery behavior, fan control under sustained load, webcam firmware, brightness keys, and suspend/resume. No physical x86_64 machine has been tried.
 
 ## What is expected to be broken or absent
 
@@ -180,15 +182,16 @@ Work down this list. Partial reports are welcome - "it did not boot" is a useful
 1. **Does it boot?** Firmware -> bootloader -> kernel. If it stops, say where.
 2. **Does greetd start?** You should reach either the desktop directly (autologin) or the tuigreet text greeter.
 3. **Does the Hyprland session come up?** Bar, wallpaper, a terminal on `Super+Return`, the menu on `Super+Space`.
-4. **Which renderer are you actually on, and does the other one work?** This is the most valuable single data point we can get from you, and we have none of it. See "The renderer question" below.
-5. **Theme switching**: `omarchy-theme-set catppuccin`, then a few others. Do the window borders, the bar, notifications and the lock screen all follow?
-6. **The menu**: `Super+Space`. Does it open, navigate, and launch things?
-7. **Suspend and resume**: close the lid, or `systemctl suspend`. Does it come back with a working display and input?
-8. **Wifi**: `nmtui` or the menu's wifi entry.
-9. **Audio**: `pactl info`, then play something. Pipewire and wireplumber are in the core.
-10. **Battery**: `upower -i $(upower -e | grep BAT)`. Does the bar show a battery?
-11. **Brightness keys**: the `XF86MonBrightness*` keys, or `brightnessctl set 50%`.
-12. **Webcam**: `ls /dev/video*`, then any v4l2 tool you have.
+4. **Can you authenticate and use physical input?** Enter credentials through tuigreet when shown, type in a terminal, move the built-in trackpad, press the physical button for left-click, and use two fingers plus the physical button for right-click. Record which device you used; an attached USB mouse is a different event node.
+5. **Which renderer are you actually on, and does the other one work?** See "The renderer question" below.
+6. **Theme switching**: `omarchy-theme-set catppuccin`, then a few others. Do the window borders, the bar, notifications and the lock screen all follow?
+7. **The menu**: `Super+Space`. Does it open, navigate, and launch things?
+8. **Suspend and resume**: close the lid, or `systemctl suspend`. Does it come back with a working display, trackpad, keyboard, and Wi-Fi?
+9. **Wi-Fi**: `nmtui` or the menu's Wi-Fi entry. Leave it idle for ten minutes and verify it remains associated.
+10. **Audio**: `pactl info`, then play something. PipeWire and WirePlumber are in the core.
+11. **Battery**: `upower -i $(upower -e | grep BAT)`. Does the bar show a battery?
+12. **Brightness keys**: the `XF86MonBrightness*` keys, or `brightnessctl set 50%`.
+13. **Webcam**: `ls /dev/video*`, then any v4l2 tool you have.
 
 ### The renderer question
 
@@ -223,6 +226,18 @@ env | grep -E 'HYPRLAND_|AQ_|WLR_|XDG_|WAYLAND'
 lspci -nn | grep -i vga
 ls -l /dev/dri/
 
+# Exact target and package closure
+cat /sys/class/dmi/id/product_name
+pacman -Q libinput dconf glib2 qt6-base qt6-declarative
+pacman -Qkk libinput dconf
+
+# Built-in input device and the effective libinput model
+grep -A10 -B2 appletouch /proc/bus/input/devices
+event=$(grep -l appletouch /sys/class/input/event*/device/name | sed -n '1s#.*/\(event[0-9]*\)/.*#\1#p')
+libinput quirks validate
+libinput quirks list "/dev/input/$event"
+libinput list-devices | sed -n '/Device:.*appletouch/,+24p'
+
 # Login chain
 journalctl -b -u greetd --no-pager | tail -50
 
@@ -253,7 +268,7 @@ If the desktop comes up at all but you are working over a network, `omarchy-remo
 ## Install paths
 
 - **x86_64** (VMs, cloud instances, thin clients, ordinary old laptops): [`docs/runbooks/install-x86_64.md`](docs/runbooks/install-x86_64.md). This is the low-friction path and the one most testers want. No override packages, ordinary UEFI.
-- **i686 on the 2006 MacBook A1181**: [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md). Harder: archlinux32, 32-bit EFI, and three prebuilt downloads from [release `i686-20260902`](https://github.com/cederikdotcom/omarchy32cpu/releases/tag/i686-20260902) - the desktop stack tarball and two override packages. Get them before you start; the target has no browser.
+- **i686 on the 2006 MacBook A1181**: [`docs/runbooks/a1181-install.md`](docs/runbooks/a1181-install.md). Harder: ArchLinux32, 32-bit EFI, the published desktop stack, and a coherent override-package set. The original `i686-20260902` release is no longer the complete physical baseline because the tested machine also requires rebuilt libinput and dconf packages that have not yet been published. Read the runbook's package warning before writing a disk.
 
 ## How to report
 

@@ -336,9 +336,10 @@
         "docs/a1181-gap-analysis.md",
         "docs/divergence.md",
         "docs/file-layout.md",
+        "docs/history/",
         "docs/runbooks/"
       ],
-      "handling": "Almost all additive: the release notes (with the audited package divergence table), the A1181 gap analysis, the three install and bench runbooks, the divergence-registry reference, and a README and TESTING.md describing the fork rather than upstream. Two upstream-owned files are edited rather than added: docs/file-layout.md gains the fork-only directories, and AGENTS.md gains the paragraph pointing contributors at this registry.",
+      "handling": "Almost all additive: the release notes (with the audited package divergence table), the A1181 gap analysis and historical lessons, the install and bench runbooks, the divergence-registry reference, and a README and TESTING.md describing the fork rather than upstream. Two upstream-owned files are edited rather than added: docs/file-layout.md gains the fork-only directories, and AGENTS.md gains the paragraph pointing contributors at this registry.",
       "rationale": "A fork that substitutes a bootloader, a greeter, a renderer and a package set has to write down why, or every one of those decisions gets re-argued from memory. The additive files are free at merge time - they remove nothing upstream ships - so most of this entry's weight is weight without risk. The two edited files are the exception and are the only part of this entry that can conflict.",
       "shared_with": []
     },
