@@ -1,0 +1,32 @@
+# Maintainer: Omarchy32 CPU project
+
+pkgname=libvips
+pkgver=8.16.1
+pkgrel=1
+pkgdesc="Image processing library with the Omarchy wallpaper codecs"
+arch=(i686 pentium4)
+url="https://www.libvips.org"
+license=(LGPL-2.1-or-later)
+depends=(glibc gcc-libs glib2 expat libjpeg-turbo libpng libwebp lcms2 zlib)
+makedepends=(meson)
+provides=(libvips.so libvips-cpp.so)
+source=("https://github.com/libvips/libvips/releases/download/v$pkgver/vips-$pkgver.tar.xz")
+sha256sums=('d114d7c132ec5b45f116d654e17bb4af84561e3041183cd4bfd79abfb85cf724')
+options=(!debug)
+
+build() {
+  # Keep JPEG/PNG/WebP wallpaper processing independent of optional loaders
+  # whose ArchLinux32 packages have incompatible SONAMEs on the target.
+  arch-meson "vips-$pkgver" build \
+    -Dauto_features=disabled -Dmodules=disabled -Dexamples=false \
+    -Djpeg=enabled -Dpng=enabled -Dwebp=enabled -Dlcms=enabled -Dzlib=enabled
+  meson compile -C build -j 1
+}
+
+check() {
+  meson test -C build --print-errorlogs --num-processes 1
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+}

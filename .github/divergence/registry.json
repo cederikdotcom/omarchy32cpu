@@ -225,6 +225,7 @@
       "status": "porting",
       "pathspecs": [
         "install/config/omarchy-path.sh",
+        "packages/",
         "install/config/memory-tuning.sh",
         "default/bash/env-bootstrap",
         "test/shell.d/dev-env-path-test.sh",

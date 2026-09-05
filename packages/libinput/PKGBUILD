@@ -1,0 +1,46 @@
+# Maintainer: Omarchy32 CPU project
+
+pkgname=libinput
+pkgver=1.29.1
+pkgrel=1.1
+pkgdesc="Input device management and event handling library"
+arch=(i686 pentium4)
+url="https://gitlab.freedesktop.org/libinput/libinput"
+license=(MIT)
+depends=(glibc libevdev libwacom mtdev systemd-libs)
+makedepends=(cairo libx11 meson wayland)
+optdepends=(
+  'gtk4: libinput debug-gui'
+  'python-libevdev: libinput measure'
+  'python-pyudev: libinput measure'
+  'python-yaml: used by various tools'
+)
+provides=(libinput.so)
+source=("$pkgname-$pkgver.tar.gz::https://gitlab.freedesktop.org/libinput/libinput/-/archive/$pkgver/libinput-$pkgver.tar.gz")
+sha256sums=('98bb615d98ddc4607bddb13a7b7550d129eb8cd16f86cd5ca090207bc46b488b')
+options=(!debug)
+
+prepare() {
+  cd "$pkgname-$pkgver"
+
+  # Upstream ad2a2799 fixes an event-frame heap overflow on 32-bit systems.
+  grep -Fq 'zalloc(max_size * sizeof(*frame->events) + sizeof(*frame));' src/evdev-frame.h
+  if grep -Fq 'sizeof(sizeof(*frame->events))' src/evdev-frame.h; then
+    return 1
+  fi
+}
+
+build() {
+  local meson_options=(
+    -D debug-gui=false
+    -D documentation=false
+    -D tests=false
+  )
+  arch-meson "$pkgname-$pkgver" build "${meson_options[@]}"
+  meson compile -C build
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+  install -Dm644 "$pkgname-$pkgver/COPYING" -t "$pkgdir/usr/share/licenses/$pkgname"
+}
