@@ -46,11 +46,11 @@ or rounded corners. The Hyprland and aquamarine binaries come from that
 fork build until a fork package repo exists; everything else installs from
 the distribution repos.
 
-Kept unchanged: the Hyprland config layer (`config/hypr`, `default/hypr`),
-the theme engine, the bash environment, the omarchy CLI router, keybinding
-philosophy, zram/oomd memory tuning. New: `omarchy-remote-view` serves the
-live session over VNC (wayvnc, CPU-side screencopy) for cloud and headless
-use.
+The upstream workflow and keybinding philosophy are retained, with hardware, package and session adaptations tracked in the [divergence registry](docs/divergence.md). New: `omarchy-remote-view` serves the live session over VNC (wayvnc, CPU-side screencopy) for cloud and headless use.
+
+### Hyprland and aquamarine are separate forks
+
+Omarchy's divergence totals cover this repository only. CPU composition is tracked in [Hyprland / `pixman-renderer`](https://github.com/cederikdotcom/Hyprland/blob/pixman-renderer/docs/divergence.md); CPU allocation and display presentation are tracked in [aquamarine / `cpu-backend`](https://github.com/cederikdotcom/aquamarine/blob/cpu-backend/docs/divergence.md). Those documents contain the detailed patch ownership, upstream backlog, limitations, validation gates and issue links. Each distinguishes custom patches against its pinned release baseline from its distance to current upstream main.
 
 ## Status
 

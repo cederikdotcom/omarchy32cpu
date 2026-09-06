@@ -11,6 +11,24 @@ The registry is the third option: a small set of **semantic divergence entries**
 - [`.github/workflows/upstream-sync.yml`](../.github/workflows/upstream-sync.yml) - runs the report on every scheduled and manual sync, writes the table into the job summary, and refreshes each linked issue.
 - [`test/shell.d/divergence-registry-test.sh`](../test/shell.d/divergence-registry-test.sh) - covers classification, the two failure modes, the weighting arithmetic, and issue-body idempotence.
 
+## Scope: three repositories, not one combined total
+
+This registry measures **only the Omarchy repository**. Zero unmerged Omarchy commits does not mean its renderer dependencies are up to date. The implementation changes in Hyprland and aquamarine have their own baselines, ownership registries, tracking issues and reporting workflows:
+
+| Repository / working branch | Responsibility | Detailed divergence and remaining work |
+|---|---|---|
+| `cederikdotcom/omarchy32cpu` / `main` | Desktop configuration, installation, packages, hardware setup and Quickshell integration | This document and [live accounting](https://github.com/cederikdotcom/omarchy32cpu/issues/19) |
+| `cederikdotcom/Hyprland` / `pixman-renderer` | CPU pixel composition, renderer selection, SHM capture guards and build compatibility | [Hyprland divergence](https://github.com/cederikdotcom/Hyprland/blob/pixman-renderer/docs/divergence.md) |
+| `cederikdotcom/aquamarine` / `cpu-backend` | CPU buffer allocation, nested Wayland SHM presentation and DRM dumb-buffer scanout | [Aquamarine divergence](https://github.com/cederikdotcom/aquamarine/blob/cpu-backend/docs/divergence.md) |
+
+The renderer working branches are not those forks' default `main` branches. Follow the branch-specific links above for the maintained CPU-port documentation and issue links. More detailed code ownership, limitations, validation gates and convergence priorities belong in those repositories, not duplicated in this registry.
+
+### Reading the figures
+
+At Omarchy `4b3278af` against upstream `36e56f4f`, the report counted **145 divergent paths and 11,742 added/deleted lines**, with zero unmerged upstream commits. About 67% of that churn was fork documentation, infrastructure and the omitted Omarchy 3→4 upgrade tooling; 3,925 lines remained across hardware, packages, configuration and tests. This is a dated snapshot, not a permanent constant; documentation changes also change the count. Use the live issue/report for current totals.
+
+The renderer source snapshots measured on 2026-09-06 were **19 custom files / 1,423 changed lines in Hyprland** and **6 custom files / 353 changed lines in aquamarine**, before adding their accounting documentation. These are measured against their pinned upstream release baselines, not current upstream main. Direct comparisons to main were much larger for Hyprland because it follows `v0.56.2-b`; the detailed renderer reports show both custom patch weight and current-main tree/commit distance. Do not add unlike baselines into a single "percentage converged" or omit the renderer forks when describing the whole system.
+
 ## Entry schema
 
 | Field | Meaning |
@@ -62,6 +80,6 @@ The block carries no timestamp, so a run against an unchanged upstream renders b
 
 ## What it does not measure
 
-File count and line churn are proxies for effort, not for risk. `quattro-upgrade-tool` is a quarter of the line churn and carries no risk at all - it is one deleted script that can never run here - while `render-cpu` owns a modest slice of the tree and represents the fork's entire reason to exist, most of which lives in out-of-repo compositor patches that this table cannot see. `shell-qt-software` is in the registry at exactly 0% for the same reason.
+File count and line churn are proxies for effort, not for risk. `quattro-upgrade-tool` is large because upstream's old upgrade path is omitted; that does not make it the largest implementation task. `render-cpu` owns the integration/configuration evidence here, while the compositor and allocation implementations are measured in the two repositories linked above. `shell-qt-software` is **not zero**: it currently owns the image-picker QML software-backend adaptation and its regression test. The separately built Quickshell binary and its private-Qt-ABI packaging risks are not measured by those two source paths.
 
 Read the table for where the *merge conflicts* will come from. Read the `status` and `rationale` fields for where the *work* is.
