@@ -1,0 +1,33 @@
+# Maintainer: Omarchy32 CPU project
+pkgname=ttfx
+pkgver=0.3.2
+pkgrel=1
+pkgdesc="Terminal text effects for the Omarchy screensaver"
+arch=(i686 pentium4)
+url="https://github.com/omacom/ttfx"
+license=(MIT)
+makedepends=(rust)
+_commit=7203e354498462064b7c0a89375051f65cf2ce99
+source=("ttfx-$_commit.tar.gz::https://codeload.github.com/omacom/ttfx/tar.gz/$_commit")
+sha256sums=(c5df04a06ab54f88802d06ffa0e47bfb054718974a5f99f7672d81b4c20ef672)
+options=(!debug !strip !lto)
+
+build() {
+  cd "ttfx-$_commit"
+  if [[ -n ${TTFX_PREBUILT:-} ]]; then
+    # Cross-build packaging only: require an explicitly verified artifact.
+    [[ -n ${TTFX_PREBUILT_SHA256:-} ]] || return 1
+    printf '%s  %s\n' "$TTFX_PREBUILT_SHA256" "$TTFX_PREBUILT" | sha256sum -c - || return 1
+    install -Dm755 "$TTFX_PREBUILT" target/release/ttfx
+  else
+    RUSTFLAGS="${RUSTFLAGS:-} -C target-cpu=pentium-m" cargo build --locked --release -j 1
+  fi
+}
+
+package() {
+  cd "ttfx-$_commit"
+  install -Dm755 target/release/ttfx "$pkgdir/usr/bin/ttfx"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/ttfx/LICENSE"
+  install -Dm644 NOTICE "$pkgdir/usr/share/licenses/ttfx/NOTICE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/ttfx/README.md"
+}

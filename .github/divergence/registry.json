@@ -152,7 +152,7 @@
     {
       "id": "packages-core",
       "issue": 8,
-      "title": "82-package core: no preinstalled applications or optional daemons",
+      "title": "Minimal core: no preinstalled applications or optional daemons",
       "status": "deferred",
       "pathspecs": [
         "install/omarchy-base.packages",
@@ -169,6 +169,14 @@
         "install/user/mise-work.sh",
         "install/user/first-run/install-voxtype.hook",
         "bin/omarchy-launch-terminal",
+        "bin/omarchy-launch-floating-terminal-with-presentation",
+        "bin/omarchy-launch-tui",
+        "bin/omarchy-default-agent",
+        "bin/omarchy-launch-screensaver",
+        "bin/omarchy-screensaver",
+        "bin/omarchy-branding-screensaver",
+        "test/shell.d/floating-terminal-test.sh",
+        "test/shell.d/lite-launchers-test.sh",
         "bin/omarchy-provision-user",
         "config/hypr/hyprland.lua",
         "default/hypr/autostart.lua",
@@ -182,7 +190,7 @@
         "test/shell.d/provisioning-groups-test.sh",
         "test/shell.d/firewall-config-test.sh"
       ],
-      "handling": "install/omarchy-base.packages is an 82-name list against upstream's ~150, and every name has to resolve on both official Arch x86_64 and archlinux32 i686 because the list is shared and pacstrap aborts on a name it cannot find. The consequences are scripted rather than assumed: no Docker step or firewall rules for it, no Chromium or mise user step, no udiskie autostart, preinstalled-app keybindings off by default, a foot fallback where xdg-terminal-exec is missing, default handlers claimed only for .desktop files that exist, a bluez guard, and no cups/avahi/docker/power-profiles services enabled. Upstream's assertions about those components are rewritten to assert their absence instead of being deleted.",
+      "handling": "install/omarchy-base.packages is a minimal shared list: every name must resolve on both official Arch x86_64 and archlinux32 i686. No Docker/firewall setup, Chromium/mise user setup, udiskie autostart or optional app services. Terminal, TUI, presentation and screensaver launchers fall back to foot without xdg-terminal-exec. Missing agents/installers fail visibly without changing defaults; failed presentation commands remain readable. socat is restored as screensaver infrastructure; ttfx needs the separate compatibility package. Missing artwork falls back to the shipped logo, effects run at 30 FPS, and failed effects stop instead of looping. Default handlers require installed desktop files. Upstream optional-component assertions are rewritten to assert their absence, not deleted.",
       "rationale": "The fork's stated scope: a 2 GB, 1.83 GHz, 2006 machine gets a core desktop and the user installs applications themselves. Most of these packages exist on both arches and are deferred on purpose; a few (chromium at archlinux32's 2021 build, the AUR and pkgs.omarchy.org apps) have concrete reasons recorded in docs/RELEASE-NOTES.md under \"Package divergence from upstream\". This is the entry to consult before re-litigating \"why is X not here\".",
       "shared_with": [
         "login-greeter",
@@ -216,7 +224,8 @@
       "pathspecs": [
         "bin/omarchy-theme-set",
         "bin/omarchy-theme-set-foot-section",
-        "default/themed/foot.ini.tpl"
+        "default/themed/foot.ini.tpl",
+        "default/foot/screensaver.ini"
       ],
       "handling": "The template emits [colors] and omits any cursor colour; bin/omarchy-theme-set-foot-section then asks the installed foot binary (foot --check-config) which section name it accepts and rewrites the rendered file to match, as a post-theme step. bin/omarchy-theme-set also refuses to install a staging directory whose colors.toml is empty.",
       "rationale": "foot renamed [colors] to [colors-dark] and moved the cursor option between versions; archlinux32 ships 1.13 and official Arch ships 1.27, and an unknown option is a hard config error in both. One static template cannot satisfy both arches, so the fork probes instead of pinning. Probing the binary is version-agnostic and would serve upstream too - this entry should end as a pull request, not as a permanent fork difference.",

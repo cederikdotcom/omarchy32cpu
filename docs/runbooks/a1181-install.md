@@ -99,8 +99,7 @@ neatvnc, and the stack tarball was never on it at all.
 
 - Target: MacBook1,1 (early 2006 Core Duo, A1181, EMC 2092) on archlinux32
   i686. 2 GB RAM cap; max it (2x1 GB).
-- Omarchy Lite: no preinstalled applications. The core is the 82-package list
-  in `install/omarchy-base.packages`, which pulls about 464 packages in total.
+- Omarchy Lite: no preinstalled applications. The core list is `install/omarchy-base.packages`; its resolved dependency count depends on repository state. The screensaver also needs the [ttfx compatibility package](../../packages/README.md#screensaver-engine-ttfx).
 
 ## Technology map: what each layer does
 

@@ -136,6 +136,7 @@ re2
 ripgrep
 seatd
 slurp
+socat
 starship
 sudo
 tmux

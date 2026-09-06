@@ -8,6 +8,8 @@
 
 set -euo pipefail
 
+mkdir -p "$HOME/.config/omarchy/branding"
+
 case "${1:-}" in
 image)
   image=$(omarchy-file-select --title "Pick PNG or SVG for screensaver" --extensions "png svg")

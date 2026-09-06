@@ -10,4 +10,14 @@ else
   APP_ID="org.omarchy.$(basename $1)"
 fi
 
-exec setsid uwsm-app -- xdg-terminal-exec --app-id=$APP_ID -e "$1" "${@:2}"
+if omarchy-cmd-missing "$1"; then
+  echo "$1 is not installed" >&2
+  omarchy-notification-send "Cannot launch application" "$1 is not installed on this lite system." || true
+  exit 127
+fi
+
+if omarchy-cmd-present xdg-terminal-exec; then
+  exec setsid uwsm-app -- xdg-terminal-exec --app-id="$APP_ID" -e "$@"
+else
+  exec setsid uwsm-app -- foot --app-id="$APP_ID" -e "$@"
+fi

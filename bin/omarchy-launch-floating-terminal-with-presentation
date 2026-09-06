@@ -8,6 +8,10 @@
 source omarchy-restart-gum
 
 cmd="$*"
-presentation_script="omarchy-show-logo; $cmd; if (( \$? != 130 )); then omarchy-show-done; fi"
+presentation_script="omarchy-show-logo; $cmd; status=\$?; if (( status == 0 )); then omarchy-show-done; elif (( status != 130 )); then printf '\\nCommand failed (exit %s). Press any key to close...' \"\$status\"; [[ ! -t 0 ]] || read -rsn 1; fi; exit \"\$status\""
 
-exec setsid uwsm-app -- xdg-terminal-exec --app-id=org.omarchy.terminal --title=Omarchy -e bash -c "$presentation_script"
+if omarchy-cmd-present xdg-terminal-exec; then
+  exec setsid uwsm-app -- xdg-terminal-exec --app-id=org.omarchy.terminal --title=Omarchy -e bash -c "$presentation_script"
+else
+  exec setsid uwsm-app -- foot --app-id=org.omarchy.terminal --title=Omarchy -e bash -c "$presentation_script"
+fi

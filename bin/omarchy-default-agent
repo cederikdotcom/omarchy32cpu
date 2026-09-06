@@ -44,6 +44,15 @@ esac
 
 agent_package=${agent_package:-$agent}
 
+if [[ -z ${agent_installer:-} ]] && omarchy-cmd-missing mise; then
+  message="Cannot install $name: the mise installer is missing from this lite system. A compatible mise and agent build are required; no default was changed."
+  echo "$message" >&2
+  if [[ $installing != "true" ]]; then
+    omarchy-notification-send "Agent installer unavailable" "$message" || true
+  fi
+  exit 127
+fi
+
 # Hermes reaches mise through its own installer rather than straight from
 # here: it needs its interpreter pinned, and a bare `mise use` has nowhere to
 # say so. See omarchy-install-hermes-cli. OpenClaw comes from its pacman

@@ -10,8 +10,20 @@ if omarchy-toggle-enabled screensaver-off && [[ $1 != "force" ]]; then
   exit 1
 fi
 
+for dependency in ttfx socat; do
+  if omarchy-cmd-missing "$dependency"; then
+    echo "Screensaver requires $dependency" >&2
+    omarchy-notification-send "Screensaver unavailable" "Missing $dependency. Install the compatible screensaver packages; see packages/README.md." || true
+    exit 127
+  fi
+done
+
 focused=$(omarchy-hyprland-monitor-focused)
-terminal=$(xdg-terminal-exec --print-id)
+if omarchy-cmd-present xdg-terminal-exec; then
+  terminal=$(xdg-terminal-exec --print-id)
+else
+  terminal=foot
+fi
 
 case $terminal in
 *Alacritty* | *ghostty* | *foot* | *kitty*) ;;
