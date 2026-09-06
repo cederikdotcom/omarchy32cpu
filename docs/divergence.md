@@ -17,7 +17,7 @@ This registry measures **only the Omarchy repository**. Zero unmerged Omarchy co
 
 | Repository / working branch | Responsibility | Detailed divergence and remaining work |
 |---|---|---|
-| `cederikdotcom/omarchy32cpu` / `main` | Desktop configuration, installation, packages, hardware setup and Quickshell integration | This document and [live accounting](https://github.com/cederikdotcom/omarchy32cpu/issues/19) |
+| `cederikdotcom/omarchy32cpu` / `main` | Desktop configuration, installation, packages, hardware setup and Quickshell integration | This document and [workflow reports](https://github.com/cederikdotcom/omarchy32cpu/actions/workflows/upstream-sync.yml) |
 | `cederikdotcom/Hyprland` / `pixman-renderer` | CPU pixel composition, renderer selection, SHM capture guards and build compatibility | [Hyprland divergence](https://github.com/cederikdotcom/Hyprland/blob/pixman-renderer/docs/divergence.md) |
 | `cederikdotcom/aquamarine` / `cpu-backend` | CPU buffer allocation, nested Wayland SHM presentation and DRM dumb-buffer scanout | [Aquamarine divergence](https://github.com/cederikdotcom/aquamarine/blob/cpu-backend/docs/divergence.md) |
 
@@ -34,6 +34,16 @@ The renderer source snapshots measured on 2026-09-06 were **19 custom files / 1,
 On 2026-09-06, the documentation run fetched Omarchy upstream `988da12c`, **nine commits beyond the synchronized `36e56f4f` baseline**. These add Hermes theme/removal behavior and Perplexity installation/removal behavior. The [sync run](https://github.com/cederikdotcom/omarchy32cpu/actions/runs/34015785433) stopped at the intended unclassified-path gate (15 paths, including new commands, theme/font assets, a migration and tests). The 145-file snapshot above is therefore **not a current-upstream total**, and an older successful issue #19 report must not be read as proof that today's sync passed.
 
 No runtime merge was performed during this documentation task. Next integration work must inspect these commits, merge and test them or explicitly classify a justified deferral, then rerun the sync to publish fresh totals. Do not assign unrelated incoming paths to a catch-all group just to turn the check green. Check the [latest workflow status](https://github.com/cederikdotcom/omarchy32cpu/actions/workflows/upstream-sync.yml) together with the report's measured SHAs.
+
+## Daily monitoring and merge queue
+
+Daily schedules are configured at 06:17 UTC for Omarchy, 06:27 for Hyprland and 06:37 for aquamarine; GitHub may delay scheduled runs. The scheduler lives on each repository's default `main` branch, but explicitly checks out its real work branch: Omarchy `main`, Hyprland `pixman-renderer`, aquamarine `cpu-backend`. Hyprland checks both upstream development `main` and the pinned `v0.56.2-b` release branch. The other upstream targets are Omarchy `quattro` and aquamarine `main`.
+
+Each upstream channel has **one open merge-batch issue**, created when commits are missing by ancestry. Further checks update its target SHA, incoming commit list and merge-tree conflict result without daily duplicates. Human notes outside the generated markers survive. Once the recorded target is in the fork branch's ancestry, the monitor closes that batch; later incoming work gets a new issue. Manual closure for the same target is respected. This is one issue per pending integration batch, not one issue per commit or per daily run.
+
+Issue creation runs **before** divergence accounting, so an unclassified upstream path cannot suppress the merge task. Issue-write failures fail the job rather than silently reporting success. A merge-tree check is non-mutating with respect to the branch/index and does not execute upstream code. Source-integration detection does not prove build success or hardware acceptance; reviews, tests, actual merges and Mac deployment remain manual.
+
+The merge queue replaces the old evergreen sync-status issue #19 (retained as historical context). Semantic divergence issues remain separate. Inspect the latest workflow result alongside the queue: a merge issue can be published successfully while the later classification stage correctly fails. The copied `.github/divergence/monitor.py`, `monitor.json` and lifecycle tests define the queue behavior; renderer schedulers are mirrored on their work branches for review, but scheduling uses the default-branch copy.
 
 ## Entry schema
 

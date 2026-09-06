@@ -1,0 +1,8 @@
+{
+  "repo": "cederikdotcom/omarchy32cpu",
+  "work_branch": "main",
+  "upstream": "omacom/omarchy",
+  "upstream_branches": [
+    "quattro"
+  ]
+}
