@@ -29,6 +29,12 @@ At Omarchy `4b3278af` against upstream `36e56f4f`, the report counted **145 dive
 
 The renderer source snapshots measured on 2026-09-06 were **19 custom files / 1,423 changed lines in Hyprland** and **6 custom files / 353 changed lines in aquamarine**, before adding their accounting documentation. These are measured against their pinned upstream release baselines, not current upstream main. Direct comparisons to main were much larger for Hyprland because it follows `v0.56.2-b`; the detailed renderer reports show both custom patch weight and current-main tree/commit distance. Do not add unlike baselines into a single "percentage converged" or omit the renderer forks when describing the whole system.
 
+### Latest upstream check: incoming changes are not classified yet
+
+On 2026-09-06, the documentation run fetched Omarchy upstream `988da12c`, **nine commits beyond the synchronized `36e56f4f` baseline**. These add Hermes theme/removal behavior and Perplexity installation/removal behavior. The [sync run](https://github.com/cederikdotcom/omarchy32cpu/actions/runs/34015785433) stopped at the intended unclassified-path gate (15 paths, including new commands, theme/font assets, a migration and tests). The 145-file snapshot above is therefore **not a current-upstream total**, and an older successful issue #19 report must not be read as proof that today's sync passed.
+
+No runtime merge was performed during this documentation task. Next integration work must inspect these commits, merge and test them or explicitly classify a justified deferral, then rerun the sync to publish fresh totals. Do not assign unrelated incoming paths to a catch-all group just to turn the check green. Check the [latest workflow status](https://github.com/cederikdotcom/omarchy32cpu/actions/workflows/upstream-sync.yml) together with the report's measured SHAs.
+
 ## Entry schema
 
 | Field | Meaning |
