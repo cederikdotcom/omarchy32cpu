@@ -48,7 +48,9 @@ if [[ -z ${agent_installer:-} ]] && omarchy-cmd-missing mise; then
   message="Cannot install $name: the mise installer is missing from this lite system. A compatible mise and agent build are required; no default was changed."
   echo "$message" >&2
   if [[ $installing != "true" ]]; then
-    omarchy-notification-send "Agent installer unavailable" "$message" || true
+    if ! omarchy-notification-send "Agent installer unavailable" "$message"; then
+      exec omarchy-launch-floating-terminal-with-presentation omarchy-default-agent --install "$agent"
+    fi
   fi
   exit 127
 fi

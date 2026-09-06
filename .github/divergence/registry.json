@@ -227,7 +227,7 @@
         "default/themed/foot.ini.tpl",
         "default/foot/screensaver.ini"
       ],
-      "handling": "The template emits [colors] and omits any cursor colour; bin/omarchy-theme-set-foot-section then asks the installed foot binary (foot --check-config) which section name it accepts and rewrites the rendered file to match, as a post-theme step. bin/omarchy-theme-set also refuses to install a staging directory whose colors.toml is empty.",
+      "handling": "The template emits [colors] and omits any cursor colour; bin/omarchy-theme-set-foot-section probes foot --check-config and rewrites the rendered section to match. The static screensaver config uses [colors] for foot 1.13 compatibility and 14pt text to fit the 81-column logo on the MacBook panel. bin/omarchy-theme-set also rejects staging directories with empty colors.toml.",
       "rationale": "foot renamed [colors] to [colors-dark] and moved the cursor option between versions; archlinux32 ships 1.13 and official Arch ships 1.27, and an unknown option is a hard config error in both. One static template cannot satisfy both arches, so the fork probes instead of pinning. Probing the binary is version-agnostic and would serve upstream too - this entry should end as a pull request, not as a permanent fork difference.",
       "shared_with": []
     },

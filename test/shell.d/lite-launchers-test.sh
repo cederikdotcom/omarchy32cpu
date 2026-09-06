@@ -18,6 +18,7 @@ SH
 cat >"$tmp/bin/omarchy-notification-send" <<'SH'
 #!/bin/bash
 printf '%s\n' "$*" >>"$TEST_LOG"
+[[ ${TEST_NOTIFY_FAIL:-false} != true ]]
 SH
 cat >"$tmp/bin/setsid" <<'SH'
 #!/bin/bash
@@ -37,6 +38,11 @@ if TEST_MISSING=mise omarchy-default-agent codex >"$tmp/error" 2>&1; then fail "
 grep -q 'Agent installer unavailable' "$TEST_LOG" || fail "missing installer produces a notification"
 [[ ! -e $HOME/.config/omarchy/defaults/agent ]] || fail "missing installer must not change default"
 pass "missing installer is visible and leaves the default unchanged"
+
+TEST_NOTIFY_FAIL=true TEST_MISSING=mise omarchy-default-agent codex >"$tmp/error" 2>&1
+mapfile -d '' -t args <"$TEST_LOG"
+[[ ${args[2]} == foot && ${args[*]} == *'omarchy-default-agent --install codex'* ]] || fail "missing notification server falls back to a visible terminal"
+pass "missing notification server still exposes the installer error"
 
 omarchy-launch-tui --app-id=test printf '%s' 'argument with spaces'
 mapfile -d '' -t args <"$TEST_LOG"
